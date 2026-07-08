@@ -86,6 +86,23 @@ https://{subdomain}.quento.app/mcp
 
 Authentication: Bearer token (OAuth 2.0 via Doorkeeper, or session-based when accessed from within the Quento web app).
 
+### Getting your API key & subdomain
+
+1. **Register/sign in** at your Quento account (`https://yourcompany.quento.app`).
+2. Click your **account email** in the top-right of the nav bar to open the account dropdown, then click **Integrations**.
+
+   ![Account dropdown → Integrations](images/integrations-menu.png)
+
+   This opens the **Integrations & API** page, which also lets you choose between the built-in Quento AI assistant and ChatGPT — that part is unrelated to MCP setup.
+
+3. Scroll down and expand **Advanced Integrations**, then look under **Your Credentials**:
+
+   ![Advanced Integrations → Your Credentials](images/api-key-credentials.png)
+
+   - **API Key** — click **Copy** to grab it. This becomes your `QUENTO_API_KEY` env var / the Bearer token below. (The key itself is redacted in this screenshot — never commit a real key or a screenshot showing one.)
+   - **Account Subdomain** — click **Copy**. This is the `{subdomain}` in the MCP URL above.
+   - The orange banner is not a suggestion: anyone with the API key has full access to the account's data. If a key ever leaks (e.g. into a screenshot, log, or commit), use **Regenerate Key** immediately to invalidate it.
+
 Add to your MCP client config (`~/.claude.json` for Claude Code — under `mcpServers`, not `~/.claude/mcp.json`):
 
 ```json

@@ -12,7 +12,7 @@ See [install.md](install.md) for setup including API key generation.
 
 | Skill | Description |
 |-------|-------------|
-| [quento](skills/quento/SKILL.md) | Full Quento REST API — invoices, clients, companies, analytics, KSeF (Polish e-invoicing), and more. |
+| [quento](skills/quento/SKILL.md) | Full Quento MCP server coverage — invoices, clients, companies, analytics, KSeF (Polish e-invoicing), and more. |
 
 ## What you can do
 
@@ -28,7 +28,7 @@ Once installed, your agent can:
 ## Requires
 
 - A [Quento](https://quento.app) account
-- A Quento API key (Settings → API → Generate key)
+- A Quento API key (account email dropdown → Integrations → Advanced Integrations → Your Credentials — see [install.md](install.md))
 
 ## About
 
