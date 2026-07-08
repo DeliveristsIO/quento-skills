@@ -1,7 +1,7 @@
 ---
 name: quento
 description: |
-  Interact with Quento via its REST API. Full coverage: invoices, clients, companies,
+  Interact with Quento via its MCP server. Full coverage: invoices, clients, companies,
   products, bank accounts, analytics, and KSeF (Polish e-invoicing).
   Use for ANY invoicing question or action — creating invoices, checking revenue,
   managing clients, sending invoices, querying statistics, and KSeF submissions.
@@ -72,533 +72,240 @@ invocable: true
 argument-hint: "[action] [args...]"
 ---
 
-# /quento — Quento Invoicing API
+# /quento — Quento via MCP
 
-Full REST API coverage: 32 endpoints across invoices, clients, companies (sellers), products, bank accounts, analytics, and KSeF (Polish national e-invoicing system).
+Quento is driven through its **MCP (Model Context Protocol) server**. Once connected, your agent calls tools directly — no CLI, no curl. This skill documents which tools exist, what they do, and how to chain them for common workflows.
+
+## MCP connection
+
+Quento exposes its MCP server at:
+
+```
+https://{subdomain}.quento.app/mcp
+```
+
+Authentication: Bearer token (OAuth 2.0 via Doorkeeper, or session-based when accessed from within the Quento web app).
+
+Add to your MCP client config (`~/.claude.json` for Claude Code — under `mcpServers`, not `~/.claude/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "quento": {
+      "type": "http",
+      "url": "https://yourcompany.quento.app/mcp",
+      "headers": {
+        "Authorization": "Bearer ${QUENTO_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+`${QUENTO_API_KEY}` is expanded from your shell environment — export it before launching Claude Code, don't hardcode the token in the config file.
+
+**Tool names carry a `_tool` suffix** — e.g. the tool is `list_invoices_tool`, not `list_invoices`. The three exceptions are `create_client`, `get_client`, and `update_client`, which have no suffix. All tool references below use the real, callable names.
+
+**If the tools don't show up** (`ToolSearch`/agent can't find `list_invoices_tool` etc.): MCP servers connect at Claude Code startup, so this almost always means `QUENTO_API_KEY` wasn't exported in the shell that launched the session. Restart Claude Code from a shell where it's set. As a same-session workaround, you can drive the server directly over HTTP with `curl` — POST JSON-RPC to the `url` above with `Content-Type: application/json` and `Accept: application/json, text/event-stream` headers: call `initialize`, then `notifications/initialized`, then `tools/call` for the actual tool, reusing the `Mcp-Session-Id` response header across those requests (a fresh `initialize` handshake is needed per shell invocation — the session id doesn't survive across separate `curl` processes run independently).
 
 ## Agent invariants
 
-**Always follow these rules:**
+**Always follow these rules when using Quento tools:**
 
-1. **Use `$SUBDOMAIN` from config** — every API call goes to `https://$SUBDOMAIN.quento.app/api/v1/actions/:tool_name`. Never hardcode the subdomain.
-2. **GET for reads, POST for mutations** — `list_*`, `get_*`, `lookup_*` use GET with query params. Everything else uses POST with JSON body.
-3. **Resolve IDs before acting** — use `list_clients`, `list_companies`, `list_invoices` to find IDs before passing them to mutation tools.
-4. **VAT lookups first** — if a user provides a NIP or EU VAT number, ALWAYS call `lookup_company` before creating the client. It auto-fills name and address from the VAT registry.
-5. **Minimal params** — Quento infers defaults for payment_method, currency, bank account, and dates from company settings. Only include what the user explicitly stated.
-6. **KSeF is Poland-only** — KSeF endpoints only work for companies with `country: "PL"`.
-7. **Invoice state flow** — draft → (issue) → issued → (mark_paid) → paid. You cannot edit a non-draft invoice. Cancel works from any state.
+1. **Resolve IDs first** — use `list_clients_tool`, `list_companies_tool`, or `list_invoices_tool` to find IDs before calling mutation tools.
+2. **VAT lookups first** — if the user provides a NIP or EU VAT number, ALWAYS call `lookup_company_tool` before `create_client`. It auto-fills name and address from the tax authority registry.
+3. **Minimal params** — Quento infers payment_method, currency, bank account, and dates from company settings. Only pass what the user explicitly stated.
+4. **Invoice state machine** — `draft → issue → issued → mark_paid → paid`. You cannot edit a non-draft invoice. `cancel` works from any state.
+5. **KSeF is Poland-only** — KSeF tools only work for companies with `country: "PL"` and a configured KSeF token.
+6. **Never estimate financial figures** — all amounts must come from tool results. If a tool returns no data, say so explicitly.
 
-## Authentication setup
-
-Set these in your environment or `.quento/config.json`:
-
-```bash
-export QUENTO_SUBDOMAIN="yourcompany"   # the subdomain of your Quento account
-export QUENTO_API_KEY="qnt_..."         # from Settings → API in Quento
-```
-
-Check config:
-```bash
-cat .quento/config.json 2>/dev/null || echo "No project config found"
-```
-
-All examples below use:
-```bash
-BASE="https://$QUENTO_SUBDOMAIN.quento.app/api/v1/actions"
-AUTH="Authorization: Bearer $QUENTO_API_KEY"
-```
-
-## Quick reference
-
-| Task | Method | Endpoint |
-|------|--------|----------|
-| List invoices | GET | `list_invoices` |
-| Get invoice | GET | `get_invoice?id=123` |
-| Create invoice (draft) | POST | `create_invoice` |
-| Update draft invoice | POST | `update_invoice` |
-| Issue invoice | POST | `change_invoice_status` |
-| Mark invoice paid | POST | `mark_invoice_paid` |
-| Send invoice email | POST | `send_invoice_email` |
-| Cancel invoice | POST | `change_invoice_status` |
-| Create correction | POST | `create_correction_invoice` |
-| Get PDF link | GET | `get_invoice_pdf_link?id=123` |
-| List clients | GET | `list_clients` |
-| Create client | POST | `create_client` |
-| Update client | POST | `update_client` |
-| Delete client | POST | `delete_client` |
-| List companies | GET | `list_companies` |
-| Lookup NIP/VAT | GET | `lookup_company?tax_id=...` |
-| Get statistics | GET | `get_statistics?period=current_month` |
-| List products | GET | `list_products` |
-| Submit to KSeF | POST | `submit_invoice_to_ksef` |
-| KSeF payables | GET | `list_ksef_payables` |
-
-## Decision trees
-
-### Creating an invoice
-
-```
-User wants to create an invoice?
-├── Have client name only? → list_clients?search=name → get client_id
-│   (If not found → check if user has NIP → lookup_company → create_client)
-├── Have NIP/VAT number? → lookup_company?tax_id=NIP → create_client → use client_id
-├── Have items? → include in create_invoice body
-│   Format: [{description, quantity, unit_price, vat_rate, unit}]
-│   Units: pcs, h, kg, m, szt, etc.
-│   VAT rates: 0, 5, 8, 23 (Poland); 0, 7, 19 (Germany)
-├── Ready to create? → POST create_invoice {client_id, items}
-│   → Returns draft invoice with id and invoice_number
-└── Issue it? → POST change_invoice_status {id, action: "issue"}
-    → Send it? → POST send_invoice_email {id}
-```
-
-### Checking revenue / analytics
-
-```
-Revenue question?
-├── "This month" → GET get_statistics?period=current_month
-├── "Last month" → GET get_statistics?period=last_month
-├── "This year" → GET get_statistics?period=current_year
-├── Custom range → GET get_statistics?from_date=YYYY-MM-DD&to_date=YYYY-MM-DD
-└── Specific currency → add &currency=PLN (otherwise all currencies reported)
-
-Stats include:
-  - revenue: money received (by paid_at date)
-  - outstanding: all unpaid invoices (any period)
-  - issued/paid/overdue counts
-  - top clients by revenue
-```
-
-### Finding an invoice
-
-```
-Know invoice number? → GET get_invoice?invoice_number=001%2F06%2F2026
-Know ID? → GET get_invoice?id=123
-Search? → GET list_invoices?search=client+name
-By status? → GET list_invoices?status=overdue
-By period? → GET list_invoices?from_date=2026-06-01&to_date=2026-06-30
-By payment date? → GET list_invoices?paid_from=2026-06-01&paid_to=2026-06-30
-```
-
-## Common workflows
-
-### Create and issue an invoice
-
-```bash
-# 1. Find or create client (skip if you have client_id)
-curl -sG "$BASE/list_clients" -H "$AUTH" --data-urlencode "search=Alpha Corp" | jq '.items[0].id'
-# → 42
-
-# 2. Create draft
-curl -s -X POST "$BASE/create_invoice" -H "$AUTH" -H "Content-Type: application/json" -d '{
-  "client_id": 42,
-  "items": [
-    {"description": "Web development", "quantity": 10, "unit_price": 200, "vat_rate": 23, "unit": "h"},
-    {"description": "Hosting", "quantity": 1, "unit_price": 50, "vat_rate": 23, "unit": "month"}
-  ]
-}' | jq '{id, invoice_number, total}'
-# → {"id": 101, "invoice_number": "001/06/2026", "total": "2511.00 PLN"}
-
-# 3. Issue it (assigns invoice number, finalizes)
-curl -s -X POST "$BASE/change_invoice_status" -H "$AUTH" -H "Content-Type: application/json" -d '{
-  "id": 101,
-  "action": "issue"
-}' | jq '.status'
-
-# 4. Send to client
-curl -s -X POST "$BASE/send_invoice_email" -H "$AUTH" -H "Content-Type: application/json" -d '{
-  "id": 101
-}' | jq '.sent'
-```
-
-### Mark invoice as paid
-
-```bash
-curl -s -X POST "$BASE/mark_invoice_paid" -H "$AUTH" -H "Content-Type: application/json" -d '{
-  "invoice_number": "001/06/2026",
-  "payment_date": "2026-06-20"
-}' | jq '.status'
-```
-
-### Get monthly revenue
-
-```bash
-curl -sG "$BASE/get_statistics" -H "$AUTH" \
-  --data-urlencode "period=current_month" | jq '{revenue, outstanding, period}'
-```
-
-### Look up a company by NIP and create as client
-
-```bash
-# 1. Look up NIP in Polish VAT registry
-curl -sG "$BASE/lookup_company" -H "$AUTH" --data-urlencode "tax_id=5261040828" | jq .
-
-# 2. Create client with auto-filled data
-curl -s -X POST "$BASE/create_client" -H "$AUTH" -H "Content-Type: application/json" -d '{
-  "name": "PEKAO S.A.",
-  "nip": "5261040828",
-  "country": "PL"
-}' | jq '{id, name}'
-```
-
-### Create invoice in EUR for foreign client
-
-```bash
-curl -s -X POST "$BASE/create_invoice" -H "$AUTH" -H "Content-Type: application/json" -d '{
-  "client_id": 15,
-  "currency": "EUR",
-  "items": [
-    {"description": "Consulting", "quantity": 5, "unit_price": 150, "vat_rate": 0, "unit": "h"}
-  ],
-  "pdf_secondary_language": "en"
-}' | jq '{id, total}'
-```
-
-### Submit to KSeF (Poland only)
-
-```bash
-# Invoice must already be issued
-curl -s -X POST "$BASE/submit_invoice_to_ksef" -H "$AUTH" -H "Content-Type: application/json" -d '{
-  "invoice_number": "001/06/2026"
-}' | jq .
-
-# Check status
-curl -sG "$BASE/get_ksef_status" -H "$AUTH" --data-urlencode "invoice_number=001/06/2026" | jq .
-```
-
----
-
-## Resource reference
+## Tools
 
 ### Invoices
 
-**List invoices**
-```bash
-GET /list_invoices
-Params: status, invoice_number, client_id, currency, search,
-        from_date, to_date, paid_from, paid_to, limit (default 10, max 100)
+| Tool | What it does |
+|------|-------------|
+| `list_invoices_tool` | List with filters: status, date range (by issue date), paid date range, client, search, currency |
+| `get_invoice_tool` | Get one invoice by ID or invoice_number |
+| `create_invoice_tool` | Create draft. Requires: client_id, items[]. Returns id and invoice_number. |
+| `update_invoice_tool` | Update a draft. Use `replace_items: true` when correcting items to avoid duplicates. |
+| `change_invoice_status_tool` | `action: "issue"` (draft→issued) or `action: "cancel"` |
+| `mark_invoice_paid_tool` | Mark as paid. Optional: payment_date (default today). |
+| `send_invoice_email_tool` | Email to client. Auto-issues drafts by default. |
+| `get_invoice_pdf_link_tool` | Returns the invoice's PDF URL (requires the caller to be logged in to view; not a public/shareable link) |
+| `create_correction_invoice_tool` | Create a correction of an issued invoice |
 
-Status values: draft | issued | sent | paid | overdue | cancelled
-Note: "issued", "sent", "overdue" are all unpaid invoices.
+Note: `list_invoices_tool`'s `from_date`/`to_date` filter by **issue date**; use `paid_from`/`paid_to` to filter by payment date instead.
+
+**Invoice items format:**
+```
+{description, quantity, unit_price, vat_rate, unit, product_id?}
+unit_price: in invoice currency (not cents)
+vat_rate: percentage — 23, 8, 5, 0 (PL); 19, 7, 0 (DE)
+unit: h, pcs, szt, kg, m, month, etc.
 ```
 
-**Get invoice**
-```bash
-GET /get_invoice?id=123
-GET /get_invoice?invoice_number=001%2F06%2F2026
-```
-
-**Create invoice** (creates as draft)
-```bash
-POST /create_invoice
-Required: client_id, items[]
-Optional: company_id, payment_terms, sale_date, issue_date, payment_method,
-          bank_account_id, currency, notes, internal_notes, issue_location,
-          purchase_order_number, split_payment, pdf_secondary_language,
-          discount_percentage, stripe_invoice_id, based_on
-
-Items: {description*, quantity*, unit_price*, vat_rate*, unit, product_id}
-  * required per item
-  unit_price: in invoice currency (not cents)
-  vat_rate: percentage, e.g. 23 for 23%
-  based_on: "stripe" | "paypal" | "klarna" | "revolut" | "wise"
-```
-
-**Update invoice** (draft only)
-```bash
-POST /update_invoice
-Required: id OR invoice_number
-Optional: client_id, sale_date, issue_date, payment_terms, currency,
-          payment_method, bank_account_id, notes, internal_notes,
-          discount_percentage, items[], replace_items (bool)
-
-replace_items: true = replace all items; false (default) = merge by description
-```
-
-**Change invoice status**
-```bash
-POST /change_invoice_status
-Required: (id OR invoice_number), action
-action: "issue" (draft→issued) | "cancel" (any→cancelled)
-```
-
-**Mark invoice paid**
-```bash
-POST /mark_invoice_paid
-Required: id OR invoice_number
-Optional: payment_date (default: today)
-```
-
-**Send invoice email**
-```bash
-POST /send_invoice_email
-Required: id OR invoice_number
-Optional: recipient_email, recipient_emails[], message, auto_issue (default: true)
-```
-
-**Get PDF link**
-```bash
-GET /get_invoice_pdf_link?id=123
-```
-
-**Create correction invoice**
-```bash
-POST /create_correction_invoice
-Required: original_invoice_id OR original_invoice_number
-Optional: items[], correction_reason, other invoice fields
-```
+**Status values:** `draft` | `issued` | `sent` | `overdue` | `paid` | `cancelled`
+Note: issued, sent, and overdue are all unpaid.
 
 ---
 
 ### Clients
 
-**List clients**
-```bash
-GET /list_clients
-Params: search, limit (default 10)
-```
+| Tool | What it does |
+|------|-------------|
+| `list_clients_tool` | Search by name, email, or NIP. Returns id, name, nip, email. |
+| `get_client` | Get one client by ID |
+| `create_client` | Create new client. If user provides NIP, call `lookup_company_tool` first. |
+| `update_client` | Update client details by ID |
 
-**Create client**
-```bash
-POST /create_client
-Required: name
-Optional: nip, tax_id, country, email, phone, address, city, postal_code,
-          payment_terms, notes, locale, currency
-```
-
-**Update client**
-```bash
-POST /update_client
-Required: id
-Optional: same fields as create
-```
-
-**Delete client**
-```bash
-POST /delete_client
-Required: id
-Note: fails if client has invoices — deactivate instead
-```
+Note: there is no `delete_client` tool on the live server — clients cannot be deleted via MCP.
 
 ---
 
 ### Companies (sellers)
 
-**List companies**
-```bash
-GET /list_companies
-```
-
-**Get company**
-```bash
-GET /get_company?id=1
-GET /get_company?name=MyCompany
-GET /get_company?nip=5261040828
-```
-
-**Lookup company by NIP/VAT** (external VAT registry lookup)
-```bash
-GET /lookup_company?tax_id=5261040828
-GET /lookup_company?tax_id=DE123456789
-Returns: name, address, city, postal_code, country, nip/vat_id
-```
-
-**Create company**
-```bash
-POST /create_company
-Required: name
-Optional: nip, regon, tax_id, country, email, phone, address, city,
-          postal_code, website, default_currency, locale, bank_accounts[]
-```
-
-**Update company**
-```bash
-POST /update_company
-Required: id
-Optional: same fields as create
-```
+| Tool | What it does |
+|------|-------------|
+| `list_companies_tool` | List seller companies in the account |
+| `get_company_tool` | Get one by ID, name, or NIP |
+| `create_company_tool` | Create a new seller company |
+| `update_company_tool` | Update company details |
+| `lookup_company_tool` | **Look up NIP/EU VAT in registry** — returns name and address. Call before create_client when user provides a tax ID. |
 
 ---
 
 ### Products
 
-**List products**
-```bash
-GET /list_products
-Params: search, limit
-```
+| Tool | What it does |
+|------|-------------|
+| `list_products_tool` | List product catalog |
+| `get_product_tool` | Get one product by ID |
+| `create_product_tool` | Add product: name, unit_price, vat_rate, unit |
+| `update_product_tool` | Update product |
 
-**Create product**
-```bash
-POST /create_product
-Required: name, unit_price, vat_rate
-Optional: description, unit, currency
-```
-
-**Update product**
-```bash
-POST /update_product
-Required: id
-Optional: name, unit_price, vat_rate, description, unit, currency
-```
-
-**Delete product**
-```bash
-POST /delete_product
-Required: id
-```
+Note: there is no `delete_product` tool on the live server.
 
 ---
 
 ### Bank accounts
 
-**List bank accounts**
-```bash
-GET /list_bank_accounts
-Params: company_id, currency, active (bool)
-```
+| Tool | What it does |
+|------|-------------|
+| `list_bank_accounts_tool` | List by company, currency, active status |
+| `create_bank_account_tool` | Add bank account to a company |
+| `update_bank_account_tool` | Update account details |
 
-**Get bank account**
-```bash
-GET /get_bank_account?id=5
-```
-
-**Create bank account**
-```bash
-POST /create_bank_account
-Required: company_id, bank_name, account_number, currency
-Optional: iban, swift_code, default (bool), active (bool)
-```
-
-**Update bank account**
-```bash
-POST /update_bank_account
-Required: id
-Optional: bank_name, account_number, currency, iban, swift_code, default, active
-```
-
-**Delete bank account**
-```bash
-POST /delete_bank_account
-Required: id
-```
+Note: there is no `get_bank_account` or `delete_bank_account` tool on the live server — use `list_bank_accounts_tool` to look one up.
 
 ---
 
 ### Analytics
 
-**Get statistics**
-```bash
-GET /get_statistics
-Params: period, from_date, to_date, currency
+| Tool | What it does |
+|------|-------------|
+| `get_statistics_tool` | Revenue (by payment date), outstanding receivables, invoice counts, top clients |
 
-period: current_month (default) | last_month | current_quarter | last_quarter
-        | current_year | last_year | all_time
-from_date/to_date: override period (YYYY-MM-DD)
-currency: ISO 4217 code (e.g. PLN, EUR) — omit for all currencies
+**Periods:** `current_month` (default) | `last_month` | `current_quarter` | `last_quarter` | `current_year` | `last_year` | `all_time`
 
-Returns:
-  revenue: money received in period (by payment date / paid_at)
-  outstanding: all-time unpaid (issued + overdue)
-  counts: draft, issued, paid, overdue
-  top_clients: ranked by revenue
+Or pass `from_date` / `to_date` for a custom range.
+
+Revenue = money actually received (by `paid_at`), not invoices issued.
+Each currency is reported separately — amounts are never summed across currencies.
+
+---
+
+### KSeF — Polish national e-invoicing
+
+| Tool | What it does |
+|------|-------------|
+| `submit_invoice_to_ksef_tool` | Submit an issued invoice to KSeF. Company must have KSeF credentials configured. |
+| `get_ksef_status_tool` | Check acceptance status for a submitted invoice |
+| `list_ksef_submissions_tool` | List recent submissions, filter by status |
+| `list_ksef_payables_tool` | List incoming purchase invoices received via KSeF |
+
+Note: there is no `get_ksef_upo` tool on the live server — the official receipt (UPO) isn't retrievable via MCP; check `get_ksef_status_tool` or the Quento web app instead.
+
+---
+
+## Common workflows
+
+### Create and issue an invoice
+
+```
+1. list_clients_tool(search: "Alpha Corp") → get client_id
+   (if not found: lookup_company_tool(tax_id: NIP) → create_client → client_id)
+   (if ambiguous — multiple matches — ask the user which client before proceeding)
+
+2. create_invoice_tool(
+     client_id: 42,
+     items: [
+       {description: "Consulting", quantity: 10, unit_price: 200, vat_rate: 23, unit: "h"}
+     ]
+   )
+   → returns {id: 101, invoice_number: "001/06/2026", total: "2460.00 PLN"}
+
+3. change_invoice_status_tool(id: 101, action: "issue")
+
+4. send_invoice_email_tool(id: 101)
+```
+
+### Check this month's revenue
+
+```
+get_statistics_tool(period: "current_month")
+→ {revenue: "18 450 PLN", outstanding: "6 200 PLN", period: "Czerwiec 2026"}
+```
+
+### Mark an invoice as paid
+
+```
+mark_invoice_paid_tool(invoice_number: "001/06/2026", payment_date: "2026-06-20")
+```
+
+### Fix items on a draft invoice (avoid duplicates)
+
+```
+update_invoice_tool(
+  id: 101,
+  replace_items: true,        ← ALWAYS use this when correcting items
+  items: [all items in final form]
+)
+```
+
+Without `replace_items: true`, the tool matches by description — if you renamed an item it adds a duplicate instead of replacing.
+
+### Add a client with NIP (Polish VAT)
+
+```
+1. lookup_company_tool(tax_id: "5261040828")
+   → {name: "PEKAO S.A.", address: "ul. Grzybowska 53/57", city: "Warszawa", ...}
+
+2. create_client(name: "PEKAO S.A.", nip: "5261040828", country: "PL")
+```
+
+### Submit to KSeF
+
+```
+1. Verify invoice is issued (not draft)
+2. submit_invoice_to_ksef_tool(invoice_number: "001/06/2026")
+3. get_ksef_status_tool(invoice_number: "001/06/2026")
+   → status: "accepted", reference_number: "8992520556-20260622-..."
 ```
 
 ---
 
-### KSeF (Poland only)
+## Gotchas
 
-**Submit to KSeF** — requires issued invoice + company with KSeF token
-```bash
-POST /submit_invoice_to_ksef
-Required: id OR invoice_number
-```
-
-**Get KSeF status**
-```bash
-GET /get_ksef_status?invoice_id=123
-GET /get_ksef_status?invoice_number=001%2F06%2F2026
-Optional: submission_id
-Returns: status (pending | submitted | accepted | rejected | error), reference_number, UPO
-```
-
-**List KSeF submissions**
-```bash
-GET /list_ksef_submissions
-Params: status (pending|submitted|accepted|rejected|error), limit, company_id
-```
-
-**List KSeF payables** — purchase invoices received via KSeF
-```bash
-GET /list_ksef_payables
-Params: company_id, status, search, payment_details (ready|missing), limit (max 50)
-```
-
-**Get KSeF UPO** — Urzędowe Poświadczenie Odbioru (official receipt)
-```bash
-GET /get_ksef_upo?id=123
-```
-
----
-
-## Error handling
-
-**HTTP status codes:**
-
-| Code | Meaning |
-|------|---------|
-| 200 | Success |
-| 400 | Bad request — check params in `error` field |
-| 401 | Unauthorized — verify `QUENTO_API_KEY` and subdomain |
-| 402 | Plan limit reached — upgrade required |
-| 403 | Forbidden — feature not available on your plan |
-| 404 | Not found — check ID/invoice_number |
-| 422 | Validation error — see `errors` field |
-| 429 | Rate limit — wait and retry |
-| 500 | Server error — try again |
-
-**Error response shape:**
-```json
-{"error": "human-readable message", "errors": ["field: message"]}
-```
-
-**Common errors:**
-
-- `"Unauthorized"` → wrong or missing API key; verify `Authorization: Bearer $QUENTO_API_KEY`
-- `"Invoice cannot be modified"` → invoice is issued/paid; only drafts can be updated
-- `"Client not found"` → wrong `client_id`; use `list_clients` to find it
-- `"Plan limit reached"` → account on Free/Starter plan; show upgrade message
-- `"KSeF not configured"` → company lacks KSeF credentials in Settings
-
----
-
-## Configuration
-
-Per-project config at `.quento/config.json`:
-```json
-{
-  "subdomain": "yourcompany",
-  "api_key": "qnt_..."
-}
-```
-
-Initialize:
-```bash
-mkdir -p .quento
-echo '{"subdomain": "yourcompany"}' > .quento/config.json
-```
-
-Add to `.gitignore` if config contains the API key:
-```
-.quento/config.json
-```
-
----
-
-## Notes
-
-- **Bilingual PDFs**: set `pdf_secondary_language` on `create_invoice` — e.g. Polish company issuing to a German client: `"pdf_secondary_language": "de"`. Adds translations in parentheses.
-- **Split payment (MPP)**: Polish VAT requirement for invoices > 15,000 PLN. Set `split_payment: true`.
-- **Invoice number URL encoding**: `/` must be `%2F` in query strings: `001%2F06%2F2026`.
-- **Multi-currency**: when no `currency` filter is given, `get_statistics` returns each currency separately — amounts are never summed across currencies.
-- **Stripe invoices**: set `based_on: "stripe"` and `stripe_invoice_id` on `create_invoice` to track Stripe-originated invoices.
+- **Tool names have a `_tool` suffix** — the real callable name is `list_invoices_tool`, not `list_invoices`. Only `create_client`, `get_client`, `update_client` are unsuffixed. Calling the unsuffixed form for any other tool will fail to resolve.
+- **Tools not appearing at all** — if a search for these tools comes up empty even after getting the suffix right, the MCP connection likely never came up (commonly because `QUENTO_API_KEY` wasn't set in the environment Claude Code was launched from). Restart the session from a shell with the key exported. See the workaround in "MCP connection" above for driving the server directly via HTTP in the meantime.
+- **`replace_items: true`** — always use this in `update_invoice_tool` when correcting items. Without it, a renamed item (e.g. "Farba 1L" → "Farba 10L") is added as a new duplicate instead of replacing the original.
+- **Revenue vs issued** — `get_statistics_tool` revenue is always by `paid_at` (payment date), not issue date. "How much did I earn in June?" means paid in June, not invoiced in June.
+- **`list_invoices_tool` date filters** — `from_date`/`to_date` filter by issue date; `paid_from`/`paid_to` filter by payment date. Picking the wrong pair silently returns the wrong invoices instead of erroring.
+- **Multi-currency** — statistics never mix currencies. If an account has PLN and EUR invoices, both are returned separately.
+- **KSeF Poland-only** — KSeF tools silently error or return empty if the company's country isn't PL. Check `list_companies_tool` to confirm country.
+- **Draft-only edits** — `update_invoice_tool` fails on issued/paid invoices. For issued invoices, use `create_correction_invoice_tool` instead.
+- **`auto_issue` in send_invoice_email_tool** — defaults to `true`, so calling it on a draft automatically issues it first. Pass `auto_issue: false` to disable.
+- **`list_ksef_payables_tool` access** — per-user KSeF company access controls apply. If the tool returns empty, the authenticated user may not have `ksef_access` for those companies.
+- **PDF links require login** — `get_invoice_pdf_link_tool` returns a URL under the company's own Quento domain, not a signed/temporary public link. The viewer must be logged in to Quento to open it.
+- **No delete tools** — there is no `delete_client`, `delete_product`, or `delete_bank_account` on the live server, and no `get_bank_account`/`get_ksef_upo` either, despite what older docs may say. Don't assume a tool exists — check the live `tools/list` if in doubt.
