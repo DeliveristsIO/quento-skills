@@ -3,7 +3,7 @@
 [Agent skills](https://agentskills.io) for [Quento](https://quento.app) — AI-powered invoicing for European SMBs.
 
 ```
-npx skills add deliverists-io/quento-skills
+npx skills add DeliveristsIO/quento-skills
 ```
 
 See [install.md](install.md) for setup including API key generation.
