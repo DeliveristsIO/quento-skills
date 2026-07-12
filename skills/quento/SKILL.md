@@ -110,7 +110,60 @@ Add to your MCP client config (`~/.claude.json` for Claude Code — under `mcpSe
 
 **Tool names carry a `_tool` suffix** — e.g. the tool is `list_invoices_tool`, not `list_invoices`. The three exceptions are `create_client`, `get_client`, and `update_client`, which have no suffix. All tool references below use the real, callable names.
 
-**If the tools don't show up** (`ToolSearch`/agent can't find `list_invoices_tool` etc.): MCP servers connect at Claude Code startup, so this almost always means `QUENTO_API_KEY` wasn't exported in the shell that launched the session. Restart Claude Code from a shell where it's set. As a same-session workaround, you can drive the server directly over HTTP with `curl` — POST JSON-RPC to the `url` above with `Content-Type: application/json` and `Accept: application/json, text/event-stream` headers: call `initialize`, then `notifications/initialized`, then `tools/call` for the actual tool, reusing the `Mcp-Session-Id` response header across those requests (a fresh `initialize` handshake is needed per shell invocation — the session id doesn't survive across separate `curl` processes run independently).
+**If the tools don't show up** (`ToolSearch`/agent can't find `list_invoices_tool` etc.): MCP servers connect at Claude Code startup, so this almost always means `QUENTO_API_KEY` wasn't exported in the shell that launched the session. Restart Claude Code from a shell where it's set. As a same-session workaround, you can drive the server directly over HTTP with `curl` — POST JSON-RPC to the `url` above with `Content-Type: application/json` and `Accept: application/json, text/event-stream` headers, calling `tools/call` directly.
+
+**Session persistence:** the Quento MCP server runs in **stateless mode** (SEP-2567) — each POST is self-contained, no `Mcp-Session-Id` is issued or required, and `initialize` is an optional no-op. This is required for multi-worker deployments (puma `WEB_CONCURRENCY>1`) where a stateful session map held in a per-process class variable cannot be shared across workers. You can POST `tools/call` directly with just the `Authorization` header — no handshake, no session id. (Older server builds ran stateful mode; there the `Mcp-Session-Id` from `initialize` expired within seconds, so the handshake-per-call function below was needed. The function is forward-compatible and works against both modes — in stateless mode the `initialize` and `notifications/initialized` calls are harmless no-ops.)
+
+A reusable shell function (one handshake per call — works against stateful and stateless servers alike):
+
+```bash
+QUENTO_URL="https://yourcompany.quento.app/mcp"
+QUENTO_API_KEY="..." # or export it
+
+# Simplest form for stateless servers (current): POST tools/call directly.
+quento_call() {              # quento_call <tool_name> '<json arguments>'
+  local tool="$1" args="${2:-{}}"
+  curl -sS -X POST "$QUENTO_URL" \
+    -H "Authorization: Bearer $QUENTO_API_KEY" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -H "MCP-Protocol-Version: 2024-11-05" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"$tool\",\"arguments\":$args}}"
+}
+
+# Robust form: full initialize → notifications/initialized → tools/call handshake
+# per call. Required only for older stateful server builds; a no-op overhead on
+# stateless ones. Use if quento_call ever returns "Session not found".
+quento_mcp() {                # quento_mcp <tool_name> '<json arguments>'
+  local tool="$1" args="${2:-{}}"
+  local h sid
+  h=$(curl -sS -i -X POST "$QUENTO_URL" \
+    -H "Authorization: Bearer $QUENTO_API_KEY" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -H "MCP-Protocol-Version: 2024-11-05" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"cli","version":"1"}}}')
+  sid=$(printf '%s' "$h" | grep -i '^mcp-session-id' | awk '{print $2}' | tr -d '\r')
+  curl -sS -X POST "$QUENTO_URL" \
+    -H "Authorization: Bearer $QUENTO_API_KEY" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -H "MCP-Protocol-Version: 2024-11-05" \
+    -H "Mcp-Session-Id: $sid" \
+    -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' -o /dev/null
+  curl -sS -X POST "$QUENTO_URL" \
+    -H "Authorization: Bearer $QUENTO_API_KEY" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -H "MCP-Protocol-Version: 2024-11-05" \
+    -H "Mcp-Session-Id: $sid" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"$tool\",\"arguments\":$args}}"
+}
+
+# Example:
+# quento_call get_statistics_tool '{"period":"current_month"}'
+# quento_call list_invoices_tool '{"from_date":"2026-06-01","to_date":"2026-06-30"}'
+```
 
 ## Agent invariants
 
@@ -303,6 +356,7 @@ Without `replace_items: true`, the tool matches by description — if you rename
 
 - **Tool names have a `_tool` suffix** — the real callable name is `list_invoices_tool`, not `list_invoices`. Only `create_client`, `get_client`, `update_client` are unsuffixed. Calling the unsuffixed form for any other tool will fail to resolve.
 - **Tools not appearing at all** — if a search for these tools comes up empty even after getting the suffix right, the MCP connection likely never came up (commonly because `QUENTO_API_KEY` wasn't set in the environment Claude Code was launched from). Restart the session from a shell with the key exported. See the workaround in "MCP connection" above for driving the server directly via HTTP in the meantime.
+- **Stateless server (no session id needed)** — the Quento MCP server runs in stateless mode: each `POST /mcp` is self-contained, no `Mcp-Session-Id` is issued, and `initialize` is optional. You can `POST` a `tools/call` directly with just the `Authorization` header. If you ever see `{"error":{"code":-32600,"message":"Session not found"}}`, you're talking to an older stateful build — use the `quento_mcp` handshake-per-call function in "MCP connection" above.
 - **`replace_items: true`** — always use this in `update_invoice_tool` when correcting items. Without it, a renamed item (e.g. "Farba 1L" → "Farba 10L") is added as a new duplicate instead of replacing the original.
 - **Revenue vs issued** — `get_statistics_tool` revenue is always by `paid_at` (payment date), not issue date. "How much did I earn in June?" means paid in June, not invoiced in June.
 - **`list_invoices_tool` date filters** — `from_date`/`to_date` filter by issue date; `paid_from`/`paid_to` filter by payment date. Picking the wrong pair silently returns the wrong invoices instead of erroring.
