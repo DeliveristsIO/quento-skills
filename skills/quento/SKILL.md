@@ -97,6 +97,16 @@ https://quento.app/mcp
 }
 ```
 
+### If the Quento MCP tools are not available — set up the connection yourself
+
+You (the agent reading this) can bootstrap the connection: if this skill triggered but the Quento tools are missing (no `list_invoices_tool` via tool search), the MCP server just isn't configured in your client yet. Do this:
+
+1. **Add the server to your own client's MCP config** — you know your own config location and format. Claude Code: `claude mcp add --transport http --scope user quento https://quento.app/mcp`. Codex: `codex mcp add quento --url https://quento.app/mcp`. Other clients: add `https://quento.app/mcp` as a remote/HTTP MCP server in your equivalent config.
+2. **Hand the browser step to the user** — authorization is a human-only step. Tell them to restart the session, then authenticate (Claude Code: `/mcp` → **quento** → **Authenticate**; Codex: `codex mcp login quento`; other clients: their "needs login" prompt), signing in to Quento and clicking **Authorize**. It's once per machine.
+3. **Verify after restart** by calling `list_invoices_tool` — real data means you're connected.
+
+If you can't modify your own config, or your client doesn't support HTTP MCP with OAuth, use the `mcp-remote` stdio shim (`npx mcp-remote https://quento.app/mcp`) or the API key fallback below — full walkthrough in [install.md](../../install.md).
+
 ### Fallback: API key (headless machines, CI, curl scripting)
 
 A per-account API key also works: account email dropdown → **Integrations** → **Advanced Integrations** → **Your Credentials** (screenshot walkthrough in [install.md](../../install.md)). API keys are only accepted on the tenant URL `https://{subdomain}.quento.app/mcp` (the tenant-neutral `quento.app/mcp` is OAuth-only) and go in an `"Authorization": "Bearer ..."` header — either the literal key, or `Bearer ${QUENTO_API_KEY}` expanded from your shell environment (Claude Code supports `${VAR}` expansion; export it before launching). Keep the key secure — anyone with it has full account access; use **Regenerate Key** immediately if it ever leaks.

@@ -6,7 +6,7 @@
 npx skills add DeliveristsIO/quento-skills
 ```
 
-See [install.md](install.md) for setup.
+That's effectively the whole install: the skill teaches your agent to configure the Quento MCP connection itself — you just sign in once in the browser when prompted. See [install.md](install.md) for details and fallbacks.
 
 ## Available skills
 

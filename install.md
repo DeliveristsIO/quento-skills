@@ -86,7 +86,7 @@ EXECUTE NOW: Start with Step 1. Mark TODO items complete as you go. Stop once St
 
 Quento implements standard MCP authorization, so any MCP client that supports OAuth works the same way: add `https://quento.app/mcp` as a remote/HTTP server, authenticate in the browser when prompted. Agent-specific notes:
 
-- **Codex**: `codex mcp add quento --url https://quento.app/mcp`, then `codex mcp login quento`
+- **Codex**: `codex mcp add quento --url https://quento.app/mcp`, then `codex mcp login quento`. To stop per-tool approval prompts, add `default_tools_approval_mode = "writes"` under `[mcp_servers.quento]` in `~/.codex/config.toml` — read-only tools (listing invoices, statistics) run silently, mutating ones (issuing, cancelling, KSeF submission) still ask once
 - **OpenCode**: add to `opencode.json` under `"mcp"`: `"quento": { "type": "remote", "url": "https://quento.app/mcp" }` — the OAuth flow starts automatically on first use (manual trigger: `opencode mcp auth quento`)
 - **Cursor / VS Code**: add the URL to `.cursor/mcp.json` / `.vscode/mcp.json` and click **Authenticate** when the editor flags the server as needing login
 - **Agents that only support stdio MCP servers**: use the [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) shim as the server command — `npx mcp-remote https://quento.app/mcp` — it proxies stdio↔HTTP and performs the browser OAuth itself
