@@ -175,7 +175,7 @@ quento_mcp() {                # quento_mcp <tool_name> '<json arguments>'
 1. **Resolve IDs first** — use `list_clients_tool`, `list_companies_tool`, or `list_invoices_tool` to find IDs before calling mutation tools.
 2. **VAT lookups first** — if the user provides a NIP or EU VAT number, ALWAYS call `lookup_company_tool` before `create_client`. It auto-fills name and address from the tax authority registry.
 3. **Minimal params** — Quento infers payment_method, currency, bank account, and dates from company settings. Only pass what the user explicitly stated.
-4. **Invoice state machine** — `draft → issue → issued → mark_paid → paid`. You cannot edit a non-draft invoice. `cancel` works from any state.
+4. **Invoice state machine** — `draft → issue → issued → mark_paid → paid`. You cannot edit a non-draft invoice. `cancel` works from any state. `unmark_paid` (via change_invoice_status_tool) reverts a wrongly-paid invoice back to issued.
 5. **KSeF is Poland-only** — KSeF tools only work for companies with `country: "PL"` and a configured KSeF token.
 6. **Never estimate financial figures** — all amounts must come from tool results. If a tool returns no data, say so explicitly.
 
@@ -189,7 +189,7 @@ quento_mcp() {                # quento_mcp <tool_name> '<json arguments>'
 | `get_invoice_tool` | Get one invoice by ID or invoice_number |
 | `create_invoice_tool` | Create draft. Requires: client_id, items[]. Returns id and invoice_number. |
 | `update_invoice_tool` | Update a draft. Use `replace_items: true` when correcting items to avoid duplicates. |
-| `change_invoice_status_tool` | `action: "issue"` (draft→issued) or `action: "cancel"` |
+| `change_invoice_status_tool` | `action: "issue"` (draft→issued), `action: "cancel"`, or `action: "unmark_paid"` (paid→issued, undo a mistaken payment) |
 | `mark_invoice_paid_tool` | Mark as paid. Optional: payment_date (default today). |
 | `send_invoice_email_tool` | Email to client. Auto-issues drafts by default. |
 | `get_invoice_pdf_link_tool` | Returns the invoice's PDF URL (requires the caller to be logged in to view; not a public/shareable link) |
@@ -322,6 +322,8 @@ get_statistics_tool(period: "current_month")
 ```
 mark_invoice_paid_tool(invoice_number: "001/06/2026", payment_date: "2026-06-20")
 ```
+
+**Marking paid is a state change with side effects** — it sets the payment date and records a payment entry. Phrases that mention a payment method are ambiguous: *"this invoice was paid in cash"* might mean "record the payment" (mark_invoice_paid_tool) or only "the payment method should be cash" (update_invoice_tool `payment_method`, drafts only). When the user's phrasing bundles a payment method with "paid" — or when marking paid wasn't the explicit request — confirm which they mean before calling mark_invoice_paid_tool. Changing just the payment method never requires a status change. If an invoice was marked paid by mistake, revert it with `change_invoice_status_tool(action: "unmark_paid")` — clears the payment date and removes the recorded payment entries.
 
 ### Fix items on a draft invoice (avoid duplicates)
 
