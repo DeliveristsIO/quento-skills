@@ -82,6 +82,18 @@ EXECUTE NOW: Start with Step 1. Mark TODO items complete as you go. Stop once St
 
 ---
 
+## Other agents
+
+Quento implements standard MCP authorization, so any MCP client that supports OAuth works the same way: add `https://quento.app/mcp` as a remote/HTTP server, authenticate in the browser when prompted. Agent-specific notes:
+
+- **Codex**: `codex mcp add quento --url https://quento.app/mcp`, then `codex mcp login quento`
+- **OpenCode**: add to `opencode.json` under `"mcp"`: `"quento": { "type": "remote", "url": "https://quento.app/mcp" }` — the OAuth flow starts automatically on first use (manual trigger: `opencode mcp auth quento`)
+- **Cursor / VS Code**: add the URL to `.cursor/mcp.json` / `.vscode/mcp.json` and click **Authenticate** when the editor flags the server as needing login
+- **Agents that only support stdio MCP servers**: use the [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) shim as the server command — `npx mcp-remote https://quento.app/mcp` — it proxies stdio↔HTTP and performs the browser OAuth itself
+- **Agents without MCP support** (e.g. pi) **and headless/CI machines**: use the API key fallback below
+
+---
+
 ## Fallback: API key authentication
 
 **Use this only if** the machine has no browser (SSH boxes, CI), your MCP client doesn't support OAuth for MCP servers, or you want to script the API directly with `curl`.
