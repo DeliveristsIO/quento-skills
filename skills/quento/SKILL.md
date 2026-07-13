@@ -81,36 +81,29 @@ Quento is driven through its **MCP (Model Context Protocol) server**. Once conne
 Quento exposes its MCP server at:
 
 ```
-https://{subdomain}.quento.app/mcp
+https://quento.app/mcp
 ```
 
-Authentication: Bearer token (OAuth 2.0 via Doorkeeper, or session-based when accessed from within the Quento web app).
-
-### Getting your API key & subdomain
-
-See [install.md](../../install.md) (Step 0) for a screenshot walkthrough: register, then account email dropdown → **Integrations** → **Advanced Integrations** → **Your Credentials**. Keep the key secure — anyone with it has full account access; use **Regenerate Key** immediately if it ever leaks.
-
-Add to your MCP client config (`~/.claude.json` for Claude Code — under `mcpServers`, not `~/.claude/mcp.json`):
+**Authentication is standard MCP OAuth** — no API keys to copy. Add the server with no headers to your MCP client config (`~/.claude.json` for Claude Code — under `mcpServers`, not `~/.claude/mcp.json`), restart, and authenticate in the browser when prompted (Claude Code: `/mcp` → **quento** → **Authenticate**). Tokens are stored by the client and renew automatically.
 
 ```json
 {
   "mcpServers": {
     "quento": {
       "type": "http",
-      "url": "https://yourcompany.quento.app/mcp",
-      "headers": {
-        "Authorization": "Bearer ${QUENTO_API_KEY}"
-      }
+      "url": "https://quento.app/mcp"
     }
   }
 }
 ```
 
-`${QUENTO_API_KEY}` is expanded from your shell environment — export it before launching Claude Code. This is optional: `~/.claude.json` is a local, per-machine file (not part of any project repo), so pasting the literal key directly into `Authorization: Bearer ...` works too and needs no shell setup — useful if you're not comfortable with environment variables or shell profiles (e.g. on Windows). See [install.md](../../install.md) for the simplest path, including Windows notes.
+### Fallback: API key (headless machines, CI, curl scripting)
+
+A per-account API key also works: account email dropdown → **Integrations** → **Advanced Integrations** → **Your Credentials** (screenshot walkthrough in [install.md](../../install.md)). API keys are only accepted on the tenant URL `https://{subdomain}.quento.app/mcp` (the tenant-neutral `quento.app/mcp` is OAuth-only) and go in an `"Authorization": "Bearer ..."` header — either the literal key, or `Bearer ${QUENTO_API_KEY}` expanded from your shell environment (Claude Code supports `${VAR}` expansion; export it before launching). Keep the key secure — anyone with it has full account access; use **Regenerate Key** immediately if it ever leaks.
 
 **Tool names carry a `_tool` suffix** — e.g. the tool is `list_invoices_tool`, not `list_invoices`. The three exceptions are `create_client`, `get_client`, and `update_client`, which have no suffix. All tool references below use the real, callable names.
 
-**If the tools don't show up** (`ToolSearch`/agent can't find `list_invoices_tool` etc.): MCP servers connect at Claude Code startup, so this almost always means `QUENTO_API_KEY` wasn't exported in the shell that launched the session. Restart Claude Code from a shell where it's set. As a same-session workaround, you can drive the server directly over HTTP with `curl` — POST JSON-RPC to the `url` above with `Content-Type: application/json` and `Accept: application/json, text/event-stream` headers, calling `tools/call` directly.
+**If the tools don't show up** (`ToolSearch`/agent can't find `list_invoices_tool` etc.): MCP servers connect at Claude Code startup. On the OAuth path this usually means the server isn't authorized yet — run `/mcp` → **quento** → **Authenticate**. On the API-key fallback it almost always means `QUENTO_API_KEY` wasn't exported in the shell that launched the session — restart Claude Code from a shell where it's set. As a same-session workaround, you can drive the server directly over HTTP with `curl` — POST JSON-RPC to the `url` above with `Content-Type: application/json` and `Accept: application/json, text/event-stream` headers, calling `tools/call` directly.
 
 **Session persistence:** the Quento MCP server runs in **stateless mode** (SEP-2567) — each POST is self-contained, no `Mcp-Session-Id` is issued or required, and `initialize` is an optional no-op. This is required for multi-worker deployments (puma `WEB_CONCURRENCY>1`) where a stateful session map held in a per-process class variable cannot be shared across workers. You can POST `tools/call` directly with just the `Authorization` header — no handshake, no session id. (Older server builds ran stateful mode; there the `Mcp-Session-Id` from `initialize` expired within seconds, so the handshake-per-call function below was needed. The function is forward-compatible and works against both modes — in stateless mode the `initialize` and `notifications/initialized` calls are harmless no-ops.)
 

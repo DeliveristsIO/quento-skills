@@ -6,7 +6,7 @@
 npx skills add DeliveristsIO/quento-skills
 ```
 
-See [install.md](install.md) for setup including API key generation.
+See [install.md](install.md) for setup.
 
 ## Available skills
 
@@ -27,8 +27,8 @@ Once installed, your agent can:
 
 ## Requires
 
-- A [Quento](https://quento.app) account
-- A Quento API key (account email dropdown → Integrations → Advanced Integrations → Your Credentials — see [install.md](install.md))
+- A [Quento](https://quento.app) account — you authorize the connection in your browser when the agent first connects (standard MCP OAuth, no API keys to copy)
+- For headless machines and CI, an API key fallback is available — see [install.md](install.md)
 
 ## About
 

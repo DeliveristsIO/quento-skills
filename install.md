@@ -2,52 +2,42 @@ I want you to install Agent Skills for Quento for me. Execute all steps autonomo
 
 OBJECTIVE: Install Quento agent skills so your agent can manage invoices, clients, analytics, and KSeF via the Quento MCP server.
 
-DONE WHEN: The quento skill is installed, the Quento MCP server is configured in the agent's config file, and a restart confirms the agent can call Quento tools (e.g. it lists real invoices when asked).
+DONE WHEN: The quento skill is installed, the Quento MCP server is configured in the agent's config file, and — after the user authorizes Quento in their browser — the agent can call Quento tools (e.g. it lists real invoices when asked).
 
 ## TODO
 
-- [ ] Get API key + subdomain from Quento
 - [ ] Configure the Quento MCP server connection
 - [ ] Install skill docs
-- [ ] Restart and verify
+- [ ] Restart, authenticate in the browser, verify
 
-## Step 0: Get your Quento API key
+## Step 1: Connect the Quento MCP server
 
-1. Register, or sign in to your existing Quento account, at `https://www.quento.app`
+Quento uses standard MCP OAuth — **no API keys to copy**. Add the server, and your agent will open the browser for you to sign in and approve.
 
-2. Click your **account email** in the top-right of the nav bar → **Integrations**
+For Claude Code, one command:
 
-![Account dropdown → Integrations](skills/quento/images/integrations-menu.png)
+```bash
+claude mcp add --transport http --scope user quento https://quento.app/mcp
+```
 
-3. Scroll down and expand **Advanced Integrations** → **Your Credentials**, then copy the **API Key** and the **Account Subdomain**
+(`--scope user` makes it available in every project; drop it to configure just the current one.)
 
-![Advanced Integrations → Your Credentials](skills/quento/images/api-key-credentials.png)
-
-Anyone with the API key has full access to the account's data — never commit it or a screenshot of it. If it ever leaks, click **Regenerate Key** on that same screen.
-
-## Step 1: Configure the Quento MCP server connection
-
-Add this to your agent's MCP client config. For Claude Code, that's `~/.claude.json` under `mcpServers` (a project-level `.mcp.json` works too):
+Or edit the MCP client config directly — `~/.claude.json` under `mcpServers` for Claude Code, or a project-level `.mcp.json`; other MCP clients (Cursor, VS Code, Goose, …) have an equivalent file:
 
 ```json
 {
   "mcpServers": {
     "quento": {
       "type": "http",
-      "url": "https://yourcompany.quento.app/mcp",
-      "headers": {
-        "Authorization": "Bearer your-api-key-here"
-      }
+      "url": "https://quento.app/mcp"
     }
   }
 }
 ```
 
-Replace `yourcompany` with your **Account Subdomain** and `your-api-key-here` with your **API Key**, both from Step 0.
+That's the whole config — no headers, no secrets, no subdomain. Authentication happens in Step 3.
 
-This is a plain JSON file edit — no terminal, shell profile, or environment variable needed, so it works the same way on macOS, Linux, and Windows. This config file lives on your machine only; it's not part of any project repo, so pasting the key directly here is fine.
-
-> **Prefer not to store the key in a plaintext config file?** Set it as an environment variable instead — `QUENTO_API_KEY` on macOS/Linux (`export QUENTO_API_KEY="..."` in `~/.zshrc` or `~/.bashrc`, then `source` it) or Windows (`setx QUENTO_API_KEY "..."` in PowerShell, then open a new terminal) — and reference it as `"Authorization": "Bearer ${QUENTO_API_KEY}"` instead of the literal key. `${VAR}` expansion support depends on your MCP client; Claude Code supports it. Skip this if you're not comfortable with shell configuration — pasting the key directly above is just as functional.
+Don't have a Quento account yet? Register at `https://www.quento.app` first (the browser sign-in in Step 3 needs an account to sign in to).
 
 ## Step 2: Install skill docs
 
@@ -75,9 +65,62 @@ npx skills list
 # Expected: quento skill listed
 ```
 
-## Step 3: Restart and verify
+## Step 3: Restart, authenticate, verify
 
-MCP servers connect when your agent starts, so restart your agent session now. Then ask it something like *"list my Quento invoices"* — if it responds with real data instead of an error, the connection works.
+MCP servers connect when your agent starts, so restart your agent session now.
+
+Authentication is a browser step only the user can do — if you are an agent executing this file, tell the user to do the following and wait:
+
+1. In Claude Code, run `/mcp`, select **quento**, and choose **Authenticate**. (Other MCP clients show their own "needs authentication" prompt for the server.)
+2. The browser opens Quento — sign in and click **Authorize**.
+
+That's it — tokens are stored by your MCP client and renew automatically; you won't be asked again on this machine.
+
+Then verify: ask the agent something like *"list my Quento invoices"* — if it responds with real data instead of an error, the connection works.
+
+EXECUTE NOW: Start with Step 1. Mark TODO items complete as you go. Stop once Step 3's verification succeeds (you will need the user to complete the browser authorization in Step 3).
+
+---
+
+## Fallback: API key authentication
+
+**Use this only if** the machine has no browser (SSH boxes, CI), your MCP client doesn't support OAuth for MCP servers, or you want to script the API directly with `curl`.
+
+### Get your API key and subdomain
+
+1. Sign in to your Quento account at `https://www.quento.app`
+
+2. Click your **account email** in the top-right of the nav bar → **Integrations**
+
+![Account dropdown → Integrations](skills/quento/images/integrations-menu.png)
+
+3. Scroll down and expand **Advanced Integrations** → **Your Credentials**, then copy the **API Key** and the **Account Subdomain**
+
+![Advanced Integrations → Your Credentials](skills/quento/images/api-key-credentials.png)
+
+Anyone with the API key has full access to the account's data — never commit it or a screenshot of it. If it ever leaks, click **Regenerate Key** on that same screen.
+
+### Configure with the key
+
+Unlike the OAuth setup above, API keys require your **account subdomain** in the URL (`https://quento.app/mcp` rejects them):
+
+```json
+{
+  "mcpServers": {
+    "quento": {
+      "type": "http",
+      "url": "https://yourcompany.quento.app/mcp",
+      "headers": {
+        "Authorization": "Bearer your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+Replace `yourcompany` with your **Account Subdomain** and `your-api-key-here` with your **API Key**. This config file lives on your machine only; it's not part of any project repo, so pasting the key directly here is fine.
+
+> **Prefer not to store the key in a plaintext config file?** Set it as an environment variable instead — `QUENTO_API_KEY` on macOS/Linux (`export QUENTO_API_KEY="..."` in `~/.zshrc` or `~/.bashrc`, then `source` it) or Windows (`setx QUENTO_API_KEY "..."` in PowerShell, then open a new terminal) — and reference it as `"Authorization": "Bearer ${QUENTO_API_KEY}"` instead of the literal key. `${VAR}` expansion support depends on your MCP client; Claude Code supports it.
 
 <details>
 <summary>Advanced: verify the MCP server directly, without restarting</summary>
@@ -85,7 +128,7 @@ MCP servers connect when your agent starts, so restart your agent session now. T
 This drives the server over raw HTTP (JSON-RPC), useful for troubleshooting or for an autonomous agent that wants to confirm the key/subdomain are correct before a restart:
 
 ```bash
-URL="https://yourcompany.quento.app/mcp"   # your subdomain from Step 0
+URL="https://yourcompany.quento.app/mcp"   # your subdomain from above
 SID=$(curl -sS -D - -o /dev/null -X POST "$URL" \
   -H "Authorization: Bearer $QUENTO_API_KEY" \
   -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
@@ -101,11 +144,9 @@ curl -sS -X POST "$URL" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | grep -o 'list_invoices_tool'
 ```
 
-Expected output: `list_invoices_tool`. If the key or subdomain are wrong, you'll get an auth error instead. This requires `QUENTO_API_KEY` to be set as an environment variable (see the callout in Step 1) — or just substitute your literal key into the `-H "Authorization: Bearer ..."` lines above.
+Expected output: `list_invoices_tool`. If the key or subdomain are wrong, you'll get an auth error instead. This requires `QUENTO_API_KEY` to be set as an environment variable (see the callout above) — or just substitute your literal key into the `-H "Authorization: Bearer ..."` lines.
 
 </details>
-
-EXECUTE NOW: Start with Step 0. Mark TODO items complete as you go. Stop once Step 3's verification succeeds.
 
 ---
 
