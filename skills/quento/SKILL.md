@@ -188,7 +188,7 @@ quento_mcp() {                # quento_mcp <tool_name> '<json arguments>'
 | `list_invoices_tool` | List with filters: status, date range (by issue date), paid date range, client, search, currency |
 | `get_invoice_tool` | Get one invoice by ID or invoice_number |
 | `create_invoice_tool` | Create draft. Requires: client_id, items[]. Returns id and invoice_number. |
-| `update_invoice_tool` | Update a draft. Use `replace_items: true` when correcting items to avoid duplicates. |
+| `update_invoice_tool` | Update a draft. Use `replace_items: true` when correcting items to avoid duplicates. Supports `currency` (relabels amounts, re-picks bank account) — never cancel+recreate to change currency; that burns an invoice number. |
 | `change_invoice_status_tool` | `action: "issue"` (draft→issued), `action: "cancel"`, or `action: "unmark_paid"` (paid→issued, undo a mistaken payment) |
 | `mark_invoice_paid_tool` | Mark as paid. Optional: payment_date (default today). |
 | `send_invoice_email_tool` | Email to client. Auto-issues drafts by default. |
