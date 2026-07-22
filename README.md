@@ -8,6 +8,17 @@ npx skills add DeliveristsIO/quento-skills
 
 That's effectively the whole install: the skill teaches your agent to configure the Quento MCP connection itself — you just sign in once in the browser when prompted. See [install.md](install.md) for details and fallbacks.
 
+### Claude Code plugin
+
+In Claude Code you can install this as a plugin instead — it bundles the skill *and* the Quento MCP server config in one step:
+
+```
+/plugin marketplace add DeliveristsIO/quento-skills
+/plugin install quento@deliverists
+```
+
+Then restart Claude Code, run `/mcp`, select **quento**, and authenticate in the browser. No API keys — standard MCP OAuth.
+
 ## Available skills
 
 | Skill | Description |

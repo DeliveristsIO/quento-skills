@@ -1,0 +1,20 @@
+{
+  "name": "quento",
+  "displayName": "Quento",
+  "version": "1.0.0",
+  "description": "Invoicing, clients, analytics, and KSeF (Polish e-invoicing) for European SMBs — full Quento MCP server coverage.",
+  "author": {
+    "name": "Deliverists.IO Sp. z o.o.",
+    "email": "office@deliverists.io",
+    "url": "https://deliverists.io"
+  },
+  "homepage": "https://quento.app",
+  "repository": "https://github.com/DeliveristsIO/quento-skills",
+  "keywords": ["invoicing", "accounting", "ksef", "e-invoicing", "mcp", "quento"],
+  "mcpServers": {
+    "quento": {
+      "type": "http",
+      "url": "https://quento.app/mcp"
+    }
+  }
+}

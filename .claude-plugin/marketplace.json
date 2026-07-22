@@ -1,0 +1,19 @@
+{
+  "name": "deliverists",
+  "owner": {
+    "name": "Deliverists.IO Sp. z o.o.",
+    "email": "office@deliverists.io",
+    "url": "https://deliverists.io"
+  },
+  "metadata": {
+    "description": "Plugins from Deliverists.IO",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "quento",
+      "source": "./",
+      "description": "Invoicing, clients, analytics, and KSeF (Polish e-invoicing) via the Quento MCP server."
+    }
+  ]
+}
