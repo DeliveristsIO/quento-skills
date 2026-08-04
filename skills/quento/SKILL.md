@@ -260,6 +260,26 @@ Note: there is no `get_bank_account` or `delete_bank_account` tool on the live s
 
 ---
 
+### Work journal (time tracking)
+
+Feature-flagged per account (`work_logs`) — if these tools respond "not enabled", the account has no access yet.
+
+| Tool | What it does |
+|------|-------------|
+| `list_work_logs_tool` | List entries. Filters: client_id, billing_status (`unbilled`/`billed`), date_from, date_to. Returns total hours in filter. |
+| `create_work_log_tool` | Log work: client_id, summary, work_date (default today), duration_minutes, project_name, tasks[]. |
+| `update_work_log_tool` | Update any field of an entry by ID, incl. billing_status. |
+| `summarize_unbilled_work_tool` | Unbilled time per client — entry counts, hours, amount when the client has an hourly_rate, and the entry IDs. |
+| `create_invoice_draft_from_work_logs_tool` | Turn explicit `work_log_ids` (one client, all unbilled, all with duration) into a **draft** invoice with a single aggregated hours line. Marks the entries billed. |
+
+Rules:
+- **Never guess duration.** If the user didn't say how long the work took, omit `duration_minutes` and ask; entries without duration cannot be invoiced.
+- `create_invoice_draft_from_work_logs_tool` requires explicit entry IDs (get them from `summarize_unbilled_work_tool`) and only ever creates a *draft* — issuing/sending stays with the user.
+- Deleting the draft invoice releases the entries back to unbilled.
+- If the client has an `hourly_rate` set, the draft is priced `hours × rate`; otherwise unit price is 0 and the user edits the draft.
+
+---
+
 ### Analytics
 
 | Tool | What it does |
@@ -353,6 +373,27 @@ Without `replace_items: true`, the tool matches by description — if you rename
 2. submit_invoice_to_ksef_tool(invoice_number: "001/06/2026")
 3. get_ksef_status_tool(invoice_number: "001/06/2026")
    → status: "accepted", reference_number: "8992520556-20260622-..."
+```
+
+---
+
+### Log work and invoice it
+
+```
+1. "Add 2 hours for Kwiaciarnia Aga: Brevo and DNS setup"
+   → list_clients_tool(search: "Kwiaciarnia Aga") → client_id
+   → create_work_log_tool(client_id, summary: "Brevo and DNS setup", duration_minutes: 120)
+   (no duration stated? create without duration_minutes, then ASK the user and
+    update_work_log_tool — never guess time)
+
+2. "How much unbilled work for Aga in August?"
+   → summarize_unbilled_work_tool(client_id, date_from: "2026-08-01", date_to: "2026-08-31")
+   → reports hours, amount (if hourly_rate set), and entry IDs
+
+3. "Draft an invoice from it"
+   → create_invoice_draft_from_work_logs_tool(work_log_ids: [12, 15, 18])
+   → DRAFT invoice with one "hours × rate" line; entries flip to billed.
+   The user reviews and issues it themselves (change_invoice_status_tool or web UI).
 ```
 
 ---

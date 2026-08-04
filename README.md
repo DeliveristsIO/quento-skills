@@ -34,6 +34,7 @@ Once installed, your agent can:
 - **Manage clients**: *"Add a new client — NIP 5261040828"* (auto-fills from VAT registry)
 - **Send invoices**: *"Send invoice 001/06/2026 to the client by email"*
 - **Track payments**: *"Mark invoice 001/06/2026 as paid"*
+- **Log work time**: *"Add 2 hours for Kwiaciarnia Aga: Brevo and DNS setup"*, *"How much unbilled work do I have for Aga in August?"*, *"Draft an invoice from it"* (feature-flagged work journal)
 - **KSeF**: *"Submit invoice 001/06/2026 to KSeF"* (Poland only)
 
 ## Requires
