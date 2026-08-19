@@ -8,6 +8,12 @@ npx skills add DeliveristsIO/quento-skills
 
 That's effectively the whole install: the installer auto-detects supported agents, and the skill teaches them to configure the Quento MCP connection. You only need to complete browser authorization when prompted. The optional `-a` flag restricts installation to one agent; it is not required. See [install.md](install.md) for details.
 
+## See it in action
+
+[![Watch Quento Agent Skills working in Codex](https://img.youtube.com/vi/KNJRGLmh1oc/maxresdefault.jpg)](https://youtu.be/KNJRGLmh1oc)
+
+In this short demo, Codex uses the Quento skill to list invoices and start a new invoice directly from the terminal.
+
 ### Claude Code plugin
 
 In Claude Code you can install this as a plugin instead — it bundles the skill *and* the Quento MCP server config in one step:
