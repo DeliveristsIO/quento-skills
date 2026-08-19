@@ -23,7 +23,7 @@ Then restart Claude Code, run `/mcp`, select **quento**, and authenticate in the
 
 | Skill | Description |
 |-------|-------------|
-| [quento](skills/quento/SKILL.md) | Full Quento MCP server coverage — invoices, clients, companies, analytics, KSeF (Polish e-invoicing), and more. |
+| [quento](skills/quento/SKILL.md) | Quento MCP workflows for invoices, clients, companies, analytics, KSeF (Polish e-invoicing), and more. |
 
 ## What you can do
 
@@ -38,8 +38,8 @@ Once installed, your agent can:
 
 ## Requires
 
-- A [Quento](https://quento.app) account — you authorize the connection in your browser when the agent first connects (standard MCP OAuth, no API keys to copy)
-- For headless machines and CI, an API key fallback is available — see [install.md](install.md)
+- A [Quento](https://quento.app) account
+- An MCP client that supports OAuth, with a browser available to complete authorization
 
 ## About
 

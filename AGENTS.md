@@ -10,7 +10,7 @@ Distribution repo for Quento agent skills.
 
 - `README.md`, `install.md`, and `AGENTS.md` are safe to edit directly.
 
-- Keep `skills/quento/SKILL.md` in sync with the MCP tools in the Quento app (`lib/mcp/tools/`). When a new tool is added to Quento, add it here too.
+- Keep `skills/quento/SKILL.md` in sync with the tools registered for the MCP channel in the Quento app's `lib/quento_ai/capability_registry.rb`. Tool implementations and schemas live in `lib/mcp/tools/`, but files in that directory are not necessarily exposed over MCP.
 
 ## Repo structure
 
@@ -18,6 +18,9 @@ Distribution repo for Quento agent skills.
 skills/  
   quento/  
     SKILL.md        ← MCP skill for using Quento  
+.claude-plugin/
+  plugin.json       ← Claude Code plugin manifest + MCP connection
+  marketplace.json  ← Claude Code marketplace catalog
 README.md           ← Short intro + npx install command  
 install.md          ← Autonomous install agent prompt  
 AGENTS.md           ← This file
@@ -25,15 +28,14 @@ AGENTS.md           ← This file
 
 ## Adding a new tool
 
-1. Check `lib/mcp/tools/` in the Quento repo for the tool's schema
+1. Confirm the tool is registered with the `mcp` channel in the Quento app's `lib/quento_ai/capability_registry.rb`
 
-2. Add it to the appropriate section in `skills/quento/SKILL.md`
+2. Read its schema and behavior in the corresponding `lib/mcp/tools/` implementation
 
-3. Add it to the Quick Reference table
+3. Add it to the appropriate tool table and workflow in `skills/quento/SKILL.md`
 
-4. Add relevant triggers if it covers a new user intent
+4. Add relevant triggers if it covers a new user intent, and update `README.md` or `install.md` when the public feature or setup flow changes
 
 ## Testing
 
-Verify a skill works by driving the Quento MCP server directly over HTTP (JSON-RPC: `initialize` → `notifications/initialized` → `tools/call`). See the verification script in [install.md](install.md) (Step 4) or the troubleshooting notes in [skills/quento/SKILL.md](skills/quento/SKILL.md) under "MCP connection".
-
+Verify through an OAuth-capable MCP client: connect to `https://quento.app/mcp`, complete browser authorization, then call a read-only tool such as `list_invoices_tool`. Do not document or test API-key, bearer-token, tenant-subdomain, or raw `curl` authentication flows. See [install.md](install.md) and the troubleshooting notes in [skills/quento/SKILL.md](skills/quento/SKILL.md) under "MCP connection".

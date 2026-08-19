@@ -1,7 +1,7 @@
 ---
 name: quento
 description: |
-  Interact with Quento via its MCP server. Full coverage: invoices, clients, companies,
+  Interact with Quento via its MCP server: invoices, clients, companies,
   products, bank accounts, analytics, and KSeF (Polish e-invoicing).
   Use for ANY invoicing question or action — creating invoices, checking revenue,
   managing clients, sending invoices, querying statistics, and KSeF submissions.
@@ -84,7 +84,7 @@ Quento exposes its MCP server at:
 https://quento.app/mcp
 ```
 
-**Authentication is standard MCP OAuth** — no API keys to copy. Add the server with no headers to your MCP client config (`~/.claude.json` for Claude Code — under `mcpServers`, not `~/.claude/mcp.json`), restart, and authenticate in the browser when prompted (Claude Code: `/mcp` → **quento** → **Authenticate**). Tokens are stored by the client and renew automatically.
+**Authentication is standard MCP OAuth.** Add the server with no headers to your MCP client config (`~/.claude.json` for Claude Code — under `mcpServers`, not `~/.claude/mcp.json`), restart, and authenticate in the browser when prompted (Claude Code: `/mcp` → **quento** → **Authenticate**). The client stores and renews the OAuth tokens. Do not configure API keys, bearer-token headers, or tenant-specific MCP URLs.
 
 ```json
 {
@@ -99,74 +99,17 @@ https://quento.app/mcp
 
 ### If the Quento MCP tools are not available — set up the connection yourself
 
-You (the agent reading this) can bootstrap the connection: if this skill triggered but the Quento tools are missing (no `list_invoices_tool` via tool search), the MCP server just isn't configured in your client yet. **Prefer this setup over the curl/API-key fallback even if a `QUENTO_API_KEY` happens to be in the environment** — an interactive user is better served by the native, browser-authorized connection (the env key may also point at a different environment than the user expects). Reserve curl for genuinely headless sessions or when the user explicitly asks. Do this:
+You (the agent reading this) can bootstrap the connection: if this skill triggered but the Quento tools are missing (no `list_invoices_tool` via tool search), the MCP server is not configured or authorized in your client yet. Do this:
 
 1. **Add the server to your own client's MCP config** — you know your own config location and format. Claude Code: `claude mcp add --transport http --scope user quento https://quento.app/mcp`. Codex: `codex mcp add quento --url https://quento.app/mcp`. OpenCode: add `"quento": { "type": "remote", "url": "https://quento.app/mcp" }` under `"mcp"` in `opencode.json`. Other clients: add `https://quento.app/mcp` as a remote/HTTP MCP server in your equivalent config.
 2. **Hand the browser step to the user** — authorization is a human-only step. Tell them to restart the session, then authenticate (Claude Code: `/mcp` → **quento** → **Authenticate**; Codex: `codex mcp login quento`; OpenCode: `opencode mcp auth quento`, or it prompts automatically on first use; other clients: their "needs login" prompt), signing in to Quento and clicking **Authorize**. It's once per machine.
 3. **Verify after restart** by calling `list_invoices_tool` — real data means you're connected.
 
-If you can't modify your own config, or your client doesn't support HTTP MCP with OAuth, use the `mcp-remote` stdio shim (`npx mcp-remote https://quento.app/mcp`) or the API key fallback below — full walkthrough in [install.md](../../install.md).
-
-### Fallback: API key (headless machines, CI, curl scripting)
-
-A per-account API key also works: account email dropdown → **Integrations** → **Advanced Integrations** → **Your Credentials** (screenshot walkthrough in [install.md](../../install.md)). API keys are only accepted on the tenant URL `https://{subdomain}.quento.app/mcp` (the tenant-neutral `quento.app/mcp` is OAuth-only) and go in an `"Authorization": "Bearer ..."` header — either the literal key, or `Bearer ${QUENTO_API_KEY}` expanded from your shell environment (Claude Code supports `${VAR}` expansion; export it before launching). Keep the key secure — anyone with it has full account access; use **Regenerate Key** immediately if it ever leaks.
+If your client only supports stdio MCP servers, use the `mcp-remote` shim (`npx mcp-remote https://quento.app/mcp`) to proxy stdio to HTTP and complete the same browser OAuth flow. If the client cannot complete MCP OAuth, tell the user that it is unsupported; do not fall back to an API key or raw HTTP calls. See [install.md](../../install.md).
 
 **Tool names carry a `_tool` suffix** — e.g. the tool is `list_invoices_tool`, not `list_invoices`. The three exceptions are `create_client`, `get_client`, and `update_client`, which have no suffix. All tool references below use the real, callable names.
 
-**If the tools don't show up** (`ToolSearch`/agent can't find `list_invoices_tool` etc.): MCP servers connect at Claude Code startup. On the OAuth path this usually means the server isn't authorized yet — run `/mcp` → **quento** → **Authenticate**. On the API-key fallback it almost always means `QUENTO_API_KEY` wasn't exported in the shell that launched the session — restart Claude Code from a shell where it's set. As a same-session workaround, you can drive the server directly over HTTP with `curl` — POST JSON-RPC to the `url` above with `Content-Type: application/json` and `Accept: application/json, text/event-stream` headers, calling `tools/call` directly.
-
-**Session persistence:** the Quento MCP server runs in **stateless mode** (SEP-2567) — each POST is self-contained, no `Mcp-Session-Id` is issued or required, and `initialize` is an optional no-op. This is required for multi-worker deployments (puma `WEB_CONCURRENCY>1`) where a stateful session map held in a per-process class variable cannot be shared across workers. You can POST `tools/call` directly with just the `Authorization` header — no handshake, no session id. (Older server builds ran stateful mode; there the `Mcp-Session-Id` from `initialize` expired within seconds, so the handshake-per-call function below was needed. The function is forward-compatible and works against both modes — in stateless mode the `initialize` and `notifications/initialized` calls are harmless no-ops.)
-
-A reusable shell function (one handshake per call — works against stateful and stateless servers alike):
-
-```bash
-QUENTO_URL="https://yourcompany.quento.app/mcp"
-QUENTO_API_KEY="..." # or export it
-
-# Simplest form for stateless servers (current): POST tools/call directly.
-quento_call() {              # quento_call <tool_name> '<json arguments>'
-  local tool="$1" args="${2:-{}}"
-  curl -sS -X POST "$QUENTO_URL" \
-    -H "Authorization: Bearer $QUENTO_API_KEY" \
-    -H "Content-Type: application/json" \
-    -H "Accept: application/json, text/event-stream" \
-    -H "MCP-Protocol-Version: 2024-11-05" \
-    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"$tool\",\"arguments\":$args}}"
-}
-
-# Robust form: full initialize → notifications/initialized → tools/call handshake
-# per call. Required only for older stateful server builds; a no-op overhead on
-# stateless ones. Use if quento_call ever returns "Session not found".
-quento_mcp() {                # quento_mcp <tool_name> '<json arguments>'
-  local tool="$1" args="${2:-{}}"
-  local h sid
-  h=$(curl -sS -i -X POST "$QUENTO_URL" \
-    -H "Authorization: Bearer $QUENTO_API_KEY" \
-    -H "Content-Type: application/json" \
-    -H "Accept: application/json, text/event-stream" \
-    -H "MCP-Protocol-Version: 2024-11-05" \
-    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"cli","version":"1"}}}')
-  sid=$(printf '%s' "$h" | grep -i '^mcp-session-id' | awk '{print $2}' | tr -d '\r')
-  curl -sS -X POST "$QUENTO_URL" \
-    -H "Authorization: Bearer $QUENTO_API_KEY" \
-    -H "Content-Type: application/json" \
-    -H "Accept: application/json, text/event-stream" \
-    -H "MCP-Protocol-Version: 2024-11-05" \
-    -H "Mcp-Session-Id: $sid" \
-    -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' -o /dev/null
-  curl -sS -X POST "$QUENTO_URL" \
-    -H "Authorization: Bearer $QUENTO_API_KEY" \
-    -H "Content-Type: application/json" \
-    -H "Accept: application/json, text/event-stream" \
-    -H "MCP-Protocol-Version: 2024-11-05" \
-    -H "Mcp-Session-Id: $sid" \
-    -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"$tool\",\"arguments\":$args}}"
-}
-
-# Example:
-# quento_call get_statistics_tool '{"period":"current_month"}'
-# quento_call list_invoices_tool '{"from_date":"2026-06-01","to_date":"2026-06-30"}'
-```
+**If the tools don't show up** (`ToolSearch`/agent can't find `list_invoices_tool` etc.): restart the client after adding the server, then open its MCP settings and complete OAuth authorization. Claude Code: `/mcp` → **quento** → **Authenticate**. Codex: `codex mcp login quento`, then inspect `/mcp` after restarting if needed. Do not work around a missing OAuth connection with `curl` or manually supplied credentials.
 
 ## Agent invariants
 
@@ -360,8 +303,7 @@ Without `replace_items: true`, the tool matches by description — if you rename
 ## Gotchas
 
 - **Tool names have a `_tool` suffix** — the real callable name is `list_invoices_tool`, not `list_invoices`. Only `create_client`, `get_client`, `update_client` are unsuffixed. Calling the unsuffixed form for any other tool will fail to resolve.
-- **Tools not appearing at all** — if a search for these tools comes up empty even after getting the suffix right, the MCP connection likely never came up (commonly because `QUENTO_API_KEY` wasn't set in the environment Claude Code was launched from). Restart the session from a shell with the key exported. See the workaround in "MCP connection" above for driving the server directly via HTTP in the meantime.
-- **Stateless server (no session id needed)** — the Quento MCP server runs in stateless mode: each `POST /mcp` is self-contained, no `Mcp-Session-Id` is issued, and `initialize` is optional. You can `POST` a `tools/call` directly with just the `Authorization` header. If you ever see `{"error":{"code":-32600,"message":"Session not found"}}`, you're talking to an older stateful build — use the `quento_mcp` handshake-per-call function in "MCP connection" above.
+- **Tools not appearing at all** — restart the client after adding the server and complete browser authorization in its MCP settings. If OAuth cannot be completed, the client is not supported; do not substitute API keys or raw HTTP calls.
 - **`replace_items: true`** — always use this in `update_invoice_tool` when correcting items. Without it, a renamed item (e.g. "Farba 1L" → "Farba 10L") is added as a new duplicate instead of replacing the original.
 - **Revenue vs issued** — `get_statistics_tool` revenue is always by `paid_at` (payment date), not issue date. "How much did I earn in June?" means paid in June, not invoiced in June.
 - **`list_invoices_tool` date filters** — `from_date`/`to_date` filter by issue date; `paid_from`/`paid_to` filter by payment date. Picking the wrong pair silently returns the wrong invoices instead of erroring.

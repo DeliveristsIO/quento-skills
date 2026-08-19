@@ -1,3 +1,9 @@
 .quento/config.json
 .env
 *.key
+
+# Local skill installs and generated artifacts are not distribution sources.
+.agents/
+skills-lock.json
+demo/
+outputs/
