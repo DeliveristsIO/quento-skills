@@ -6,7 +6,7 @@
 npx skills add DeliveristsIO/quento-skills
 ```
 
-That's effectively the whole install: the skill teaches your agent to configure the Quento MCP connection itself — you just sign in once in the browser when prompted. See [install.md](install.md) for details and fallbacks.
+That's effectively the whole install: the installer auto-detects supported agents, and the skill teaches them to configure the Quento MCP connection. You only need to complete browser authorization when prompted. The optional `-a` flag restricts installation to one agent; it is not required. See [install.md](install.md) for details.
 
 ### Claude Code plugin
 

@@ -45,12 +45,18 @@ Don't have a Quento account yet? Register at `https://www.quento.app` first (the
 npx skills add DeliveristsIO/quento-skills
 ```
 
-This installs the Quento skill into your agent using the [Agent Skills](https://agentskills.io) standard. The installer auto-detects your agent (Claude Code, Cursor, Codex, VS Code, Goose, Amp, and others).
+This installs the Quento skill using the [Agent Skills](https://agentskills.io) standard. The installer auto-detects supported agents (Claude Code, Cursor, Codex, VS Code, Goose, Amp, and others), so you normally should not pass `-a`.
 
-To install for a specific agent:
+Use `-a` only when you intentionally want to restrict installation to a specific agent:
 
 ```bash
 npx skills add DeliveristsIO/quento-skills -a claude-code
+```
+
+To target every agent supported by the installer rather than only detected agents:
+
+```bash
+npx skills add DeliveristsIO/quento-skills --all
 ```
 
 To install globally (available across all projects):
