@@ -118,9 +118,10 @@ If your client only supports stdio MCP servers, use the `mcp-remote` shim (`npx 
 1. **Resolve IDs first** — use `list_clients_tool`, `list_companies_tool`, or `list_invoices_tool` to find IDs before calling mutation tools.
 2. **VAT lookups first** — if the user provides a NIP or EU VAT number, ALWAYS call `lookup_company_tool` before `create_client`. It auto-fills name and address from the tax authority registry.
 3. **Minimal params** — Quento infers payment_method, currency, bank account, and dates from company settings. Only pass what the user explicitly stated.
-4. **Invoice state machine** — `draft → issue → issued → mark_paid → paid`. You cannot edit a non-draft invoice. `cancel` works from any state. `unmark_paid` (via change_invoice_status_tool) reverts a wrongly-paid invoice back to issued.
-5. **KSeF is Poland-only** — KSeF tools only work for companies with `country: "PL"` and a configured KSeF token.
-6. **Never estimate financial figures** — all amounts must come from tool results. If a tool returns no data, say so explicitly.
+4. **Detect currency mismatches** — after resolving the seller company, compare its default currency with any currency the user attached to item prices or totals. If they differ, fetch and present the current exchange rate before creating or updating the invoice. Follow the "Foreign-currency amount for a PLN company" workflow below; never silently convert or relabel amounts.
+5. **Invoice state machine** — `draft → issue → issued → mark_paid → paid`. You cannot edit a non-draft invoice. `cancel` works from any state. `unmark_paid` (via change_invoice_status_tool) reverts a wrongly-paid invoice back to issued.
+6. **KSeF is Poland-only** — KSeF tools only work for companies with `country: "PL"` and a configured KSeF token.
+7. **Never estimate financial figures** — all amounts must come from tool results or an explicitly cited exchange-rate source. If a tool or rate source returns no data, say so explicitly.
 
 ## Tools
 
@@ -253,6 +254,31 @@ Note: there is no `get_ksef_upo` tool on the live server — the official receip
 4. send_invoice_email_tool(id: 101)
 ```
 
+### Foreign-currency amount for a PLN company
+
+When the resolved seller company's default currency is PLN but the user supplies an amount in USD (or another foreign currency):
+
+```
+1. Retrieve the latest published exchange rate from a live, authoritative source.
+   For PLN pairs, prefer the National Bank of Poland (NBP) average exchange-rate table.
+
+2. Before any invoice mutation, tell the user:
+   - the rate and direction (for example, "1 USD = 3.91 PLN")
+   - the rate's effective date and source
+   - the converted amount, if useful
+   - that a current informational rate may differ from the legally required tax/accounting rate
+
+3. If the user has not specified the invoice currency, ask whether to:
+   a. create the invoice in USD and keep the entered numerical prices unchanged, or
+   b. create it in PLN and convert the prices using the displayed rate.
+
+4. Create or update the draft only after the intended invoice currency is clear.
+   Pass `currency: "USD"` when keeping the invoice in USD. When converting to PLN,
+   pass the confirmed converted unit prices; changing `currency` alone does not convert values.
+```
+
+Always retrieve a fresh rate; do not use model memory or an uncited rate. Never silently convert, and never describe `update_invoice_tool(currency: ...)` as conversion: it only relabels the existing amounts and re-picks the matching bank account. If the user requests a statutory VAT/accounting conversion, do not assume the current rate applies—establish the relevant transaction/tax date and retrieve the rate required for that date.
+
 ### Check this month's revenue
 
 ```
@@ -308,6 +334,7 @@ Without `replace_items: true`, the tool matches by description — if you rename
 - **Revenue vs issued** — `get_statistics_tool` revenue is always by `paid_at` (payment date), not issue date. "How much did I earn in June?" means paid in June, not invoiced in June.
 - **`list_invoices_tool` date filters** — `from_date`/`to_date` filter by issue date; `paid_from`/`paid_to` filter by payment date. Picking the wrong pair silently returns the wrong invoices instead of erroring.
 - **Multi-currency** — statistics never mix currencies. If an account has PLN and EUR invoices, both are returned separately.
+- **Currency changes do not convert amounts** — `update_invoice_tool(currency: ...)` only relabels the existing numbers and re-picks a bank account. For a company-currency/user-input mismatch, show a fresh sourced rate and establish the intended invoice currency before mutating the draft.
 - **KSeF Poland-only** — KSeF tools silently error or return empty if the company's country isn't PL. Check `list_companies_tool` to confirm country.
 - **Draft-only edits** — `update_invoice_tool` fails on issued/paid invoices. For issued invoices, use `create_correction_invoice_tool` instead.
 - **`auto_issue` in send_invoice_email_tool** — defaults to `true`, so calling it on a draft automatically issues it first. Pass `auto_issue: false` to disable.
