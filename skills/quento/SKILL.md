@@ -131,7 +131,7 @@ If your client only supports stdio MCP servers, use the `mcp-remote` shim (`npx 
 |------|-------------|
 | `list_invoices_tool` | List with filters: status, date range (by issue date), paid date range, client, search, currency |
 | `get_invoice_tool` | Get one invoice by ID or invoice_number |
-| `create_invoice_tool` | Create draft. Requires: client_id, items[]. Returns id and invoice_number. |
+| `create_invoice_tool` | Create draft. Requires: items[]. client_id is optional — a draft can be created without a client and one added later via update_invoice_tool, but a client is required before issuing. Returns id and invoice_number. |
 | `update_invoice_tool` | Update a draft. Use `replace_items: true` when correcting items to avoid duplicates. Supports `currency` (relabels amounts, re-picks bank account) — never cancel+recreate to change currency; that burns an invoice number. |
 | `change_invoice_status_tool` | `action: "issue"` (draft→issued), `action: "cancel"`, or `action: "unmark_paid"` (paid→issued, undo a mistaken payment) |
 | `mark_invoice_paid_tool` | Mark as paid. Optional: payment_date (default today). |
