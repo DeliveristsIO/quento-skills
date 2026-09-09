@@ -1,0 +1,36 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "quento",
+  "version": "1.0.0",
+  "description": "Invoicing for European SMBs — invoices, clients, companies, products, bank accounts, analytics and KSeF (Polish e-invoicing) through the Quento MCP server.",
+  "author": {
+    "name": "Deliverists.IO Sp. z o.o.",
+    "email": "office@deliverists.io",
+    "url": "https://deliverists.io"
+  },
+  "homepage": "https://quento.app",
+  "repository": "https://github.com/DeliveristsIO/quento-skills",
+  "keywords": ["invoicing", "accounting", "ksef", "e-invoicing", "analytics", "quento"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Quento",
+        "shortDescription": "Invoicing, clients and analytics for European SMBs.",
+        "longDescription": "Read and change a Quento account: draft, issue, send and correct invoices, keep clients and companies (auto-filled from the VAT registry), track payments and unbilled work, run revenue analytics, and submit to KSeF where Polish e-invoicing applies.",
+        "developerName": "Deliverists.IO Sp. z o.o.",
+        "category": "Finance",
+        "capabilities": ["Read", "Write"],
+        "websiteURL": "https://quento.app",
+        "privacyPolicyURL": "https://quento.app/privacy",
+        "termsOfServiceURL": "https://quento.app/terms",
+        "defaultPrompt": [
+          "Use Quento to invoice Alpha Corp for 10 hours of consulting at 200 PLN/h.",
+          "Ask Quento how much revenue came in last month.",
+          "Use Quento to mark invoice 001/06/2026 as paid.",
+          "Ask Quento which invoices are still unpaid."
+        ],
+        "brandColor": "#000000"
+      }
+    }
+  }
+}
