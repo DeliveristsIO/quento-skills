@@ -29,7 +29,7 @@ Then restart Claude Code, run `/mcp`, select **quento**, and authenticate in the
 
 | Skill | Description |
 |-------|-------------|
-| [quento](skills/quento/SKILL.md) | Quento MCP workflows for invoices, clients, companies, analytics, KSeF (Polish e-invoicing), and more. |
+| [quento](skills/quento/SKILL.md) | Quento MCP workflows for invoices, clients, companies, products, work logs, analytics, KSeF (Polish e-invoicing), and more. |
 
 ## What you can do
 

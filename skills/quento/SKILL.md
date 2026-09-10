@@ -1,75 +1,17 @@
 ---
 name: quento
 description: |
-  Interact with Quento via its MCP server: invoices, clients, companies,
-  products, bank accounts, analytics, and KSeF (Polish e-invoicing).
-  Use for ANY invoicing question or action — creating invoices, checking revenue,
-  managing clients, sending invoices, querying statistics, and KSeF submissions.
-triggers:
-  # Direct invocations
-  - quento
-  - /quento
-  # Invoice actions
-  - create invoice
-  - new invoice
-  - draft invoice
-  - issue invoice
-  - send invoice
-  - mark paid
-  - mark invoice paid
-  - cancel invoice
-  - correction invoice
-  - invoice PDF
-  - get invoice
-  - list invoices
-  - find invoice
-  - show invoice
-  - invoice status
-  # Client actions
-  - add client
-  - new client
-  - create client
-  - update client
-  - list clients
-  - find client
-  - show client
-  # Company/seller actions
-  - list companies
-  - add company
-  - company details
-  - lookup NIP
-  - lookup VAT
-  - look up company
-  # Analytics
-  - revenue
-  - earnings
-  - statistics
-  - stats
-  - how much did I earn
-  - overdue invoices
-  - unpaid invoices
-  - outstanding receivables
-  # KSeF (Polish e-invoicing)
-  - KSeF
-  - ksef
-  - submit to ksef
-  - e-invoice
-  - e-faktura
-  - purchase invoice
-  - payables
-  # Products
-  - product catalog
-  - add product
-  - list products
-  # Bank accounts
-  - bank account
-  # Common questions
-  - invoice quento
-  - quento invoice
-  - quento client
-  - quento stats
-invocable: true
-argument-hint: "[action] [args...]"
+  Interact with Quento via its MCP server: invoices, clients, companies, products,
+  bank accounts, work logs, analytics, and KSeF (Polish e-invoicing). Use for ANY
+  invoicing question or action — creating, issuing, sending, correcting or cancelling
+  invoices, marking invoices paid, invoice PDFs, adding or looking up clients by
+  NIP/VAT, revenue and overdue/unpaid statistics, logging work time and billing it,
+  and KSeF submissions or payables. Triggers on "quento", "/quento", "invoice",
+  "faktura", "e-faktura", "KSeF", "NIP", "revenue", "how much did I earn".
+compatibility: Requires an MCP client with OAuth support and a browser to authorize https://quento.app/mcp
+metadata:
+  author: Deliverists.IO
+  homepage: https://quento.app
 ---
 
 # /quento — Quento via MCP
@@ -105,7 +47,7 @@ You (the agent reading this) can bootstrap the connection: if this skill trigger
 2. **Hand the browser step to the user** — authorization is a human-only step. Tell them to restart the session, then authenticate (Claude Code: `/mcp` → **quento** → **Authenticate**; Codex: `codex mcp login quento`; OpenCode: `opencode mcp auth quento`, or it prompts automatically on first use; other clients: their "needs login" prompt), signing in to Quento and clicking **Authorize**. It's once per machine.
 3. **Verify after restart** by calling `list_invoices_tool` — real data means you're connected.
 
-If your client only supports stdio MCP servers, use the `mcp-remote` shim (`npx mcp-remote https://quento.app/mcp`) to proxy stdio to HTTP and complete the same browser OAuth flow. If the client cannot complete MCP OAuth, tell the user that it is unsupported; do not fall back to an API key or raw HTTP calls. See [install.md](../../install.md).
+If your client only supports stdio MCP servers, use the `mcp-remote` shim (`npx mcp-remote https://quento.app/mcp`) to proxy stdio to HTTP and complete the same browser OAuth flow. If the client cannot complete MCP OAuth, tell the user that it is unsupported; do not fall back to an API key or raw HTTP calls. See [install.md](https://github.com/DeliveristsIO/quento-skills/blob/main/install.md).
 
 **Tool names carry a `_tool` suffix** — e.g. the tool is `list_invoices_tool`, not `list_invoices`. The three exceptions are `create_client`, `get_client`, and `update_client`, which have no suffix. All tool references below use the real, callable names.
 
@@ -122,6 +64,7 @@ If your client only supports stdio MCP servers, use the `mcp-remote` shim (`npx 
 5. **Invoice state machine** — `draft → issue → issued → mark_paid → paid`. You cannot edit a non-draft invoice. `cancel` works from any state. `unmark_paid` (via change_invoice_status_tool) reverts a wrongly-paid invoice back to issued.
 6. **KSeF is Poland-only** — KSeF tools only work for companies with `country: "PL"` and a configured KSeF token.
 7. **Never estimate financial figures** — all amounts must come from tool results or an explicitly cited exchange-rate source. If a tool or rate source returns no data, say so explicitly.
+8. **Bill work-log entries with `create_invoice_draft_from_work_logs_tool`** — never `create_invoice_tool`. Only the dedicated tool links the invoice to the entries and marks them billed.
 
 ## Tools
 
@@ -206,15 +149,15 @@ Note: there is no `get_bank_account` or `delete_bank_account` tool on the live s
 
 ### Work journal (time tracking)
 
-Feature-flagged per account (`work_logs`) — if these tools respond "not enabled", the account has no access yet.
+Feature-flagged per account (`work_logs`). If these tools answer "The work journal feature is not enabled for this account", tell the user to enable it in Quento; do not fall back to `create_invoice_tool` for journal entries.
 
 | Tool | What it does |
 |------|-------------|
-| `list_work_logs_tool` | List entries. Filters: client_id, billing_status (`unbilled`/`billed`), date_from, date_to. Returns total hours in filter. |
-| `create_work_log_tool` | Log work: client_id, summary, work_date (default today), duration_minutes, project_name, tasks[]. |
-| `update_work_log_tool` | Update any field of an entry by ID, incl. billing_status. |
-| `summarize_unbilled_work_tool` | Unbilled time per client — entry counts, hours, amount when the client has an hourly_rate, and the entry IDs. |
-| `create_invoice_draft_from_work_logs_tool` | Turn explicit `work_log_ids` (one client, all unbilled, all with duration) into a **draft** invoice with a single aggregated hours line. Marks the entries billed. |
+| `create_work_log_tool` | Log time spent for a client: client_id, summary, optional work_date (default today), duration_minutes, project_name, tasks[]. Omit duration when the user didn't state it — never guess. |
+| `list_work_logs_tool` | List entries; filter by client_id, billing_status (`unbilled` \| `billed`), date_from/date_to, limit (default 20, max 100). Returns total hours in filter. |
+| `update_work_log_tool` | Update an entry by id: summary, date, duration, project, client, tasks (replaces the list), billing_status |
+| `summarize_unbilled_work_tool` | Unbilled time per client: entry count, total hours, amount when the client has an hourly rate, and the entry IDs |
+| `create_invoice_draft_from_work_logs_tool` | Create a DRAFT invoice from explicit `work_log_ids` of one client (all unbilled). Task items become one line each; plain entries aggregate into a single hours line and must have a duration. Links entries to the invoice and marks them billed. Never issues or sends. |
 
 Rules:
 - **Never guess duration.** If the user didn't say how long the work took, omit `duration_minutes` and ask; entries without duration cannot be invoiced.
@@ -299,6 +242,16 @@ When the resolved seller company's default currency is PLN but the user supplies
 
 Always retrieve a fresh rate; do not use model memory or an uncited rate. Never silently convert, and never describe `update_invoice_tool(currency: ...)` as conversion: it only relabels the existing amounts and re-picks the matching bank account. If the user requests a statutory VAT/accounting conversion, do not assume the current rate applies—establish the relevant transaction/tax date and retrieve the rate required for that date.
 
+### Bill logged work
+
+```
+1. summarize_unbilled_work_tool(client_id: 42)          → hours and amount pending
+2. list_work_logs_tool(client_id: 42, billing_status: "unbilled") → entry ids
+3. create_invoice_draft_from_work_logs_tool(work_log_ids: [7, 8, 9])
+   → draft invoice; entries are now billed and linked
+4. change_invoice_status_tool(id: ..., action: "issue") only when the user asks to issue
+```
+
 ### Check this month's revenue
 
 ```
@@ -381,4 +334,5 @@ Without `replace_items: true`, the tool matches by description — if you rename
 - **`auto_issue` in send_invoice_email_tool** — defaults to `true`, so calling it on a draft automatically issues it first. Pass `auto_issue: false` to disable.
 - **`list_ksef_payables_tool` access** — per-user KSeF company access controls apply. If the tool returns empty, the authenticated user may not have `ksef_access` for those companies.
 - **PDF links require login** — `get_invoice_pdf_link_tool` returns a URL under the company's own Quento domain, not a signed/temporary public link. The viewer must be logged in to Quento to open it.
+- **Work-log billing** — `create_invoice_tool` knows nothing about journal entries and silently leaves them unbilled. Use `create_invoice_draft_from_work_logs_tool` for anything logged via the work journal.
 - **No delete tools** — there is no `delete_client`, `delete_product`, or `delete_bank_account` on the live server, and no `get_bank_account`/`get_ksef_upo` either, despite what older docs may say. Don't assume a tool exists — check the live `tools/list` if in doubt.
