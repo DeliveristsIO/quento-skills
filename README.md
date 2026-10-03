@@ -42,6 +42,7 @@ Once installed, your agent can:
 - **Track payments**: *"Mark invoice 001/06/2026 as paid"*
 - **Log work time**: *"Add 2 hours for Kwiaciarnia Aga: Brevo and DNS setup"*, *"How much unbilled work do I have for Aga in August?"*, *"Draft an invoice from it"* (feature-flagged work journal)
 - **KSeF**: *"Submit invoice 001/06/2026 to KSeF"* (Poland only)
+- **KSeF cost invoices**: *"Which supplier invoices are overdue?"* / *"Jakie faktury kosztowe mam do zapłaty?"* (Poland only)
 
 ## Requires
 
