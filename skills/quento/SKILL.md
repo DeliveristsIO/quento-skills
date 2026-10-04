@@ -6,7 +6,7 @@ description: |
   invoicing question or action — creating, issuing, sending, correcting or cancelling
   invoices, marking invoices paid, invoice PDFs, adding or looking up clients by
   NIP/VAT, revenue and overdue/unpaid statistics, logging work time and billing it,
-  KSeF submissions of sales invoices, and KSeF purchase (cost) invoices / payables
+  KSeF status of sales invoices, and KSeF purchase (cost) invoices / payables
   received from suppliers. Triggers on "quento", "/quento", "invoice", "faktura",
   "e-faktura", "KSeF", "NIP", "revenue", "how much did I earn", "faktury kosztowe",
   "faktury zakupowe", "zobowiązania", "do zapłaty", "purchase invoices", "payables".
@@ -188,14 +188,13 @@ Each currency is reported separately — amounts are never summed across currenc
 
 | Tool | What it does |
 |------|-------------|
-| `submit_invoice_to_ksef_tool` | Submit an issued invoice to KSeF. Company must have KSeF credentials configured. |
-| `get_ksef_status_tool` | Check acceptance status for a submitted invoice |
+| `get_ksef_status_tool` | Check acceptance status for an invoice submitted in the Quento app |
 | `list_ksef_submissions_tool` | List recent submissions, filter by status |
 | `list_ksef_payables_tool` | List purchase (cost) invoices received from suppliers via KSeF — faktury kosztowe/zakupowe. Read-only. Params: `company_id`, `status` (to_pay, needs_review, overdue, paid), `search` (supplier, NIP, invoice/KSeF number, payment title), `payment_details` (`ready` \| `missing`), `limit` (default 10, max 50), `sort` (`issue_date_desc` default, `issue_date_asc`, `due_date_asc`, `due_date_desc`, `amount_desc`, `amount_asc`). Returns supplier, invoice number, gross amount, due date, status, payment readiness, plus a gross total per currency across all matches. |
 
 Purchase invoices (faktury kosztowe/zakupowe) are NOT in `list_invoices_tool` or `get_statistics_tool`, which cover sales invoices only. For any question about cost invoices, what to pay, or supplier totals, call `list_ksef_payables_tool` and use only the amounts it returns. The tool cannot start bank payments; payment preparation and QR are in the Quento web app.
 
-Note: if `get_ksef_upo_tool` is missing from the live `tools/list`, the official receipt (UPO) isn't retrievable via MCP; check `get_ksef_status_tool` or the Quento web app instead.
+Note: submitting invoices to KSeF is deliberately NOT available over MCP — it needs careful human review and is done only in the Quento web app. The official receipt (`get_ksef_upo`) is not exposed over MCP either; use `get_ksef_status_tool` or the web app. Never promise to submit an invoice to KSeF; point the user to the app.
 
 ---
 
@@ -301,12 +300,12 @@ Without `replace_items: true`, the tool matches by description — if you rename
 4. list_ksef_payables_tool(payment_details: "missing") → invoices needing review
 ```
 
-### Submit to KSeF
+### Check KSeF status
+
+Submission itself is done in the Quento web app, not via MCP.
 
 ```
-1. Verify invoice is issued (not draft)
-2. submit_invoice_to_ksef_tool(invoice_number: "001/06/2026")
-3. get_ksef_status_tool(invoice_number: "001/06/2026")
+1. get_ksef_status_tool(invoice_number: "001/06/2026")
    → status: "accepted", reference_number: "8992520556-20260622-..."
 ```
 
