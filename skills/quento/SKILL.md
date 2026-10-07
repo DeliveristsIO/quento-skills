@@ -74,8 +74,8 @@ If your client only supports stdio MCP servers, use the `mcp-remote` shim (`npx 
 
 | Tool | What it does |
 |------|-------------|
-| `list_invoices_tool` | List with filters: status, date range (by issue date), paid date range, client, search, currency |
-| `get_invoice_tool` | Get one invoice by ID or invoice_number |
+| `list_invoices_tool` | List with filters: status, date range (by issue date), UTC creation date range (`created_from`/`created_to`), paid date range, client, search, currency; returns UTC `created_at`/`updated_at` |
+| `get_invoice_tool` | Get one invoice by ID or invoice_number; includes UTC timestamps and recorded payments (amount, currency, payment date, creation timestamp) |
 | `create_invoice_tool` | Create draft. Requires: items[]. client_id is optional — a draft can be created without a client and one added later via update_invoice_tool, but a client is required before issuing. Returns id and invoice_number. |
 | `update_invoice_tool` | Update a draft. Use `replace_items: true` when correcting items to avoid duplicates. Supports `currency` (relabels amounts, re-picks bank account) — never cancel+recreate to change currency; that burns an invoice number. |
 | `change_invoice_status_tool` | `action: "issue"` (draft→issued), `action: "cancel"`, or `action: "unmark_paid"` (paid→issued, undo a mistaken payment) |
@@ -85,6 +85,10 @@ If your client only supports stdio MCP servers, use the `mcp-remote` shim (`npx 
 | `create_correction_invoice_tool` | Create a correction of an issued invoice |
 
 Note: `list_invoices_tool`'s `from_date`/`to_date` filter by **issue date**; use `paid_from`/`paid_to` to filter by payment date instead.
+
+`created_from`/`created_to` filter **Quento record creation dates**, inclusive UTC days. Timestamps are ISO 8601 UTC with milliseconds. A record creation timestamp is not proof of the actual payment time.
+
+Recorded payments are in the invoice currency. An invoice marked paid can still have no recorded payment entries; missing entries remain explicitly missing.
 
 **Invoice items format:**
 ```
