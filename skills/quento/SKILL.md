@@ -194,9 +194,10 @@ Each currency is reported separately — amounts are never summed across currenc
 |------|-------------|
 | `get_ksef_status_tool` | Check acceptance status for an invoice submitted in the Quento app |
 | `list_ksef_submissions_tool` | List recent submissions, filter by status |
-| `list_ksef_payables_tool` | List purchase (cost) invoices received from suppliers via KSeF — faktury kosztowe/zakupowe. Read-only. Params: `company_id`, `status` (to_pay, needs_review, overdue, paid), `search` (supplier, NIP, invoice/KSeF number, payment title), `payment_details` (`ready` \| `missing`), `limit` (default 10, max 50), `sort` (`issue_date_desc` default, `issue_date_asc`, `due_date_asc`, `due_date_desc`, `amount_desc`, `amount_asc`). Returns supplier, invoice number, gross amount, due date, status, payment readiness, plus a gross total per currency across all matches. |
+| `list_ksef_payables_tool` | List purchase (cost) invoices received from suppliers via KSeF — faktury kosztowe/zakupowe. Read-only. Params: `company_id`, `status` (to_pay, needs_review, paid, ignored, disputed), `search` (supplier, NIP, invoice/KSeF number, payment title), `payment_details` (`ready` \| `missing`), `limit` (default 10, max 50), `sort` (`issue_date_desc` default, `issue_date_asc`, `due_date_asc`, `due_date_desc`, `amount_desc`, `amount_asc`). Returns supplier, invoice number, gross amount, due date, status, payment readiness, plus a gross total per currency across all matches. |
+| `get_ksef_payable_tool` | Get ONE purchase (cost) invoice by `id` (from `list_ksef_payables_tool`) or `invoice_number`, with supplier, KSeF number, dates, payment account/title, net/VAT/gross and parsed line items (name, qty, unit price, VAT). Read-only. Use it to see what an invoice was for, e.g. which one is the domain renewal. |
 
-Purchase invoices (faktury kosztowe/zakupowe) are NOT in `list_invoices_tool` or `get_statistics_tool`, which cover sales invoices only. For any question about cost invoices, what to pay, or supplier totals, call `list_ksef_payables_tool` and use only the amounts it returns. The tool cannot start bank payments; payment preparation and QR are in the Quento web app.
+Purchase invoices (faktury kosztowe/zakupowe) are NOT in `list_invoices_tool` or `get_statistics_tool`, which cover sales invoices only. For any question about cost invoices, what to pay, or supplier totals, call `list_ksef_payables_tool` and use only the amounts it returns. To see what a specific cost invoice contains (line items), call `get_ksef_payable_tool`; `list_ksef_payables_tool` has no line items. The tool cannot start bank payments; payment preparation and QR are in the Quento web app.
 
 Note: submitting invoices to KSeF is deliberately NOT available over MCP — it needs careful human review and is done only in the Quento web app. The official receipt (`get_ksef_upo`) is not exposed over MCP either; use `get_ksef_status_tool` or the web app. Never promise to submit an invoice to KSeF; point the user to the app.
 
@@ -299,9 +300,10 @@ Without `replace_items: true`, the tool matches by description — if you rename
 
 ```
 1. list_companies_tool                               → confirm country is PL
-2. list_ksef_payables_tool(status: "overdue")        → late supplier invoices
+2. list_ksef_payables_tool(status: "to_pay", sort: "due_date_asc") → compare due dates with today to find late ones
 3. list_ksef_payables_tool(sort: "due_date_asc", status: "to_pay") → what to pay first
 4. list_ksef_payables_tool(payment_details: "missing") → invoices needing review
+5. get_ksef_payable_tool(id: <id from list>)          → line items of one invoice
 ```
 
 ### Check KSeF status
@@ -348,7 +350,7 @@ Submission itself is done in the Quento web app, not via MCP.
 - **KSeF Poland-only** — KSeF tools silently error or return empty if the company's country isn't PL. Check `list_companies_tool` to confirm country.
 - **Draft-only edits** — `update_invoice_tool` fails on issued/paid invoices. For issued invoices, use `create_correction_invoice_tool` instead.
 - **`auto_issue` in send_invoice_email_tool** — defaults to `true`, so calling it on a draft automatically issues it first. Pass `auto_issue: false` to disable.
-- **`list_ksef_payables_tool` access** — per-user KSeF company access controls apply. If the tool returns empty, the authenticated user may not have been granted KSeF payables access for those companies (granted in Quento settings); full-account users and API keys see all PL companies.
+- **`list_ksef_payables_tool` / `get_ksef_payable_tool` access** — per-user KSeF company access controls apply. If the tool returns empty, the authenticated user may not have been granted KSeF payables access for those companies (granted in Quento settings); full-account users and API keys see all PL companies.
 - **PDF links require login** — `get_invoice_pdf_link_tool` returns a URL under the company's own Quento domain, not a signed/temporary public link. The viewer must be logged in to Quento to open it.
 - **Work-log billing** — `create_invoice_tool` knows nothing about journal entries and silently leaves them unbilled. Use `create_invoice_draft_from_work_logs_tool` for anything logged via the work journal.
 - **No delete tools** — there is no `delete_client`, `delete_product`, or `delete_bank_account` on the live server, and no `get_bank_account`/`get_ksef_upo` either, despite what older docs may say. Don't assume a tool exists — check the live `tools/list` if in doubt.
