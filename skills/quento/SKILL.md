@@ -84,32 +84,11 @@ Quento exposes its MCP server at:
 https://quento.app/mcp
 ```
 
-**Authentication is standard MCP OAuth.** Add the server with no headers to your MCP client config (`~/.claude.json` for Claude Code — under `mcpServers`, not `~/.claude/mcp.json`), restart, and authenticate in the browser when prompted (Claude Code: `/mcp` → **quento** → **Authenticate**). The client stores and renews the OAuth tokens. Do not configure API keys, bearer-token headers, or tenant-specific MCP URLs.
+**Authentication is standard MCP OAuth.** Add that tenant-neutral URL with no headers to your MCP client, restart, and authenticate in the browser when prompted. The client stores and renews the OAuth tokens. Do not configure API keys, bearer-token headers, or tenant-specific MCP URLs. Client installation and configuration are covered in [install.md](../../install.md).
 
-```json
-{
-  "mcpServers": {
-    "quento": {
-      "type": "http",
-      "url": "https://quento.app/mcp"
-    }
-  }
-}
-```
-
-### If the Quento MCP tools are not available — set up the connection yourself
-
-You (the agent reading this) can bootstrap the connection: if this skill triggered but the Quento tools are missing (no `list_invoices_tool` via tool search), the MCP server is not configured or authorized in your client yet. Do this:
-
-1. **Add the server to your own client's MCP config** — you know your own config location and format. Claude Code: `claude mcp add --transport http --scope user quento https://quento.app/mcp`. Codex: `codex mcp add quento --url https://quento.app/mcp`. OpenCode: add `"quento": { "type": "remote", "url": "https://quento.app/mcp" }` under `"mcp"` in `opencode.json`. Other clients: add `https://quento.app/mcp` as a remote/HTTP MCP server in your equivalent config.
-2. **Hand the browser step to the user** — authorization is a human-only step. Tell them to restart the session, then authenticate (Claude Code: `/mcp` → **quento** → **Authenticate**; Codex: `codex mcp login quento`; OpenCode: `opencode mcp auth quento`, or it prompts automatically on first use; other clients: their "needs login" prompt), signing in to Quento and clicking **Authorize**. It's once per machine.
-3. **Verify after restart** by calling `list_invoices_tool` — real data means you're connected.
-
-If your client only supports stdio MCP servers, use the `mcp-remote` shim (`npx mcp-remote https://quento.app/mcp`) to proxy stdio to HTTP and complete the same browser OAuth flow. If the client cannot complete MCP OAuth, tell the user that it is unsupported; do not fall back to an API key or raw HTTP calls. See [install.md](../../install.md).
+If `list_invoices_tool` does not resolve, the server is not connected or authorized in this client yet — walk the user through the per-client setup in [install.md](../../install.md), then a session restart and browser authorization. Authorization is a human-only step: never work around it with an API key, a manually inserted token, or raw HTTP calls.
 
 **Tool names carry a `_tool` suffix** — e.g. the tool is `list_invoices_tool`, not `list_invoices`. The three exceptions are `create_client`, `get_client`, and `update_client`, which have no suffix. All tool references below use the real, callable names.
-
-**If the tools don't show up** (`ToolSearch`/agent can't find `list_invoices_tool` etc.): restart the client after adding the server, then open its MCP settings and complete OAuth authorization. Claude Code: `/mcp` → **quento** → **Authenticate**. Codex: `codex mcp login quento`, then inspect `/mcp` after restarting if needed. Do not work around a missing OAuth connection with `curl` or manually supplied credentials.
 
 ## Agent invariants
 
@@ -370,7 +349,7 @@ Without `replace_items: true`, the tool matches by description — if you rename
 ## Gotchas
 
 - **Tool names have a `_tool` suffix** — the real callable name is `list_invoices_tool`, not `list_invoices`. Only `create_client`, `get_client`, `update_client` are unsuffixed. Calling the unsuffixed form for any other tool will fail to resolve.
-- **Tools not appearing at all** — restart the client after adding the server and complete browser authorization in its MCP settings. If OAuth cannot be completed, the client is not supported; do not substitute API keys or raw HTTP calls.
+- **Tools not appearing at all** — restart the client after adding the server and complete browser authorization in its MCP settings; per-client setup lives in [install.md](../../install.md). If OAuth cannot be completed, the client is not supported; do not substitute API keys or raw HTTP calls.
 - **`replace_items: true`** — always use this in `update_invoice_tool` when correcting items. Without it, a renamed item (e.g. "Farba 1L" → "Farba 10L") is added as a new duplicate instead of replacing the original.
 - **Revenue vs issued** — `get_statistics_tool` revenue is always by `paid_at` (payment date), not issue date. "How much did I earn in June?" means paid in June, not invoiced in June.
 - **`list_invoices_tool` date filters** — `from_date`/`to_date` filter by issue date; `paid_from`/`paid_to` filter by payment date. Picking the wrong pair silently returns the wrong invoices instead of erroring.

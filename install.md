@@ -88,6 +88,18 @@ EXECUTE NOW: Start with Step 1. Mark TODO items complete as you go. Stop once St
 
 ---
 
+## If the Quento tools are not available (agent self-bootstrap)
+
+If the skill triggered but the Quento tools are missing (no `list_invoices_tool` via tool search), the MCP server is not configured or authorized in your client yet. You (the agent reading this) can add the server to your own client's MCP config:
+
+1. **Add the server to your own client's MCP config** — you know your own config location and format. Claude Code: `claude mcp add --transport http --scope user quento https://quento.app/mcp`. Codex: `codex mcp add quento --url https://quento.app/mcp`. OpenCode: add `"quento": { "type": "remote", "url": "https://quento.app/mcp" }` under `"mcp"` in `opencode.json`. Other clients: add `https://quento.app/mcp` as a remote/HTTP MCP server in your equivalent config.
+2. **Hand the browser step to the user** — authorization is a human-only step. Tell them to restart the session, then authenticate (Claude Code: `/mcp` → **quento** → **Authenticate**; Codex: `codex mcp login quento`; OpenCode: `opencode mcp auth quento`, or it prompts automatically on first use; other clients: their "needs login" prompt), signing in to Quento and clicking **Authorize**. It's once per machine.
+3. **Verify after restart** by calling `list_invoices_tool` — real data means you're connected.
+
+Clients that cannot complete MCP OAuth are unsupported: if the client only speaks stdio, see the `mcp-remote` shim note in [Other agents](#other-agents) below; never fall back to an API key, a bearer-token header, or raw HTTP calls.
+
+---
+
 ## Other agents
 
 Quento implements standard MCP authorization, so any MCP client that supports OAuth works the same way: add `https://quento.app/mcp` as a remote/HTTP server, authenticate in the browser when prompted. Agent-specific notes:
