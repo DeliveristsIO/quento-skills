@@ -1,75 +1,19 @@
 ---
 name: quento
 description: |
-  Interact with Quento via its MCP server: invoices, clients, companies,
-  products, bank accounts, analytics, and KSeF (Polish e-invoicing).
-  Use for ANY invoicing question or action — creating invoices, checking revenue,
-  managing clients, sending invoices, querying statistics, and KSeF submissions.
-triggers:
-  # Direct invocations
-  - quento
-  - /quento
-  # Invoice actions
-  - create invoice
-  - new invoice
-  - draft invoice
-  - issue invoice
-  - send invoice
-  - mark paid
-  - mark invoice paid
-  - cancel invoice
-  - correction invoice
-  - invoice PDF
-  - get invoice
-  - list invoices
-  - find invoice
-  - show invoice
-  - invoice status
-  # Client actions
-  - add client
-  - new client
-  - create client
-  - update client
-  - list clients
-  - find client
-  - show client
-  # Company/seller actions
-  - list companies
-  - add company
-  - company details
-  - lookup NIP
-  - lookup VAT
-  - look up company
-  # Analytics
-  - revenue
-  - earnings
-  - statistics
-  - stats
-  - how much did I earn
-  - overdue invoices
-  - unpaid invoices
-  - outstanding receivables
-  # KSeF (Polish e-invoicing)
-  - KSeF
-  - ksef
-  - submit to ksef
-  - e-invoice
-  - e-faktura
-  - purchase invoice
-  - payables
-  # Products
-  - product catalog
-  - add product
-  - list products
-  # Bank accounts
-  - bank account
-  # Common questions
-  - invoice quento
-  - quento invoice
-  - quento client
-  - quento stats
-invocable: true
-argument-hint: "[action] [args...]"
+  Interact with Quento via its MCP server: invoices, clients, companies, products,
+  bank accounts, work logs, analytics, and KSeF (Polish e-invoicing). Use for ANY
+  invoicing question or action — creating, issuing, sending, correcting or cancelling
+  invoices, marking invoices paid, invoice PDFs, adding or looking up clients by
+  NIP/VAT, revenue and overdue/unpaid statistics, logging work time and billing it,
+  KSeF status of sales invoices, and KSeF purchase (cost) invoices / payables
+  received from suppliers. Triggers on "quento", "/quento", "invoice", "faktura",
+  "e-faktura", "KSeF", "NIP", "revenue", "how much did I earn", "faktury kosztowe",
+  "faktury zakupowe", "zobowiązania", "do zapłaty", "purchase invoices", "payables".
+compatibility: Requires an MCP client with OAuth support and a browser to authorize https://quento.app/mcp
+metadata:
+  author: Deliverists.IO
+  homepage: https://quento.app
 ---
 
 # /quento — Quento via MCP
@@ -84,9 +28,7 @@ Quento exposes its MCP server at:
 https://quento.app/mcp
 ```
 
-**Authentication is standard MCP OAuth.** Add that tenant-neutral URL with no headers to your MCP client, restart, and authenticate in the browser when prompted. The client stores and renews the OAuth tokens. Do not configure API keys, bearer-token headers, or tenant-specific MCP URLs. Client installation and configuration are covered in [install.md](../../install.md).
-
-If `list_invoices_tool` does not resolve, the server is not connected or authorized in this client yet — walk the user through the per-client setup in [install.md](../../install.md), then a session restart and browser authorization. Authorization is a human-only step: never work around it with an API key, a manually inserted token, or raw HTTP calls.
+**Authentication is standard MCP OAuth.** Add that tenant-neutral URL with no headers to your MCP client, restart, and authenticate in the browser when prompted. The client stores and renews the OAuth tokens. Do not configure API keys, bearer-token headers, or tenant-specific MCP URLs. Client installation and configuration are covered in [install.md](https://github.com/DeliveristsIO/quento-skills/blob/main/install.md).
 
 **Tool names carry a `_tool` suffix** — e.g. the tool is `list_invoices_tool`, not `list_invoices`. The three exceptions are `create_client`, `get_client`, and `update_client`, which have no suffix. All tool references below use the real, callable names.
 
@@ -101,6 +43,7 @@ If `list_invoices_tool` does not resolve, the server is not connected or authori
 5. **Invoice state machine** — `draft → issue → issued → mark_paid → paid`. You cannot edit a non-draft invoice. `cancel` works from any state. `unmark_paid` (via change_invoice_status_tool) reverts a wrongly-paid invoice back to issued.
 6. **KSeF is Poland-only** — KSeF tools only work for companies with `country: "PL"` and a configured KSeF token.
 7. **Never estimate financial figures** — all amounts must come from tool results or an explicitly cited exchange-rate source. If a tool or rate source returns no data, say so explicitly.
+8. **Bill work-log entries with `create_invoice_draft_from_work_logs_tool`** — never `create_invoice_tool`. Only the dedicated tool links the invoice to the entries and marks them billed.
 
 ## Tools
 
@@ -108,8 +51,8 @@ If `list_invoices_tool` does not resolve, the server is not connected or authori
 
 | Tool | What it does |
 |------|-------------|
-| `list_invoices_tool` | List with filters: status, date range (by issue date), paid date range, client, search, currency |
-| `get_invoice_tool` | Get one invoice by ID or invoice_number |
+| `list_invoices_tool` | List with filters: status, date range (by issue date), UTC creation date range (`created_from`/`created_to`), paid date range, client, search, currency; returns UTC `created_at`/`updated_at` |
+| `get_invoice_tool` | Get one invoice by ID or invoice_number; includes UTC timestamps and recorded payments (amount, currency, payment date, creation timestamp) |
 | `create_invoice_tool` | Create draft. Requires: items[]. client_id is optional — a draft can be created without a client and one added later via update_invoice_tool, but a client is required before issuing. Returns id and invoice_number. |
 | `update_invoice_tool` | Update a draft. Use `replace_items: true` when correcting items to avoid duplicates. Supports `currency` (relabels amounts, re-picks bank account) — never cancel+recreate to change currency; that burns an invoice number. |
 | `change_invoice_status_tool` | `action: "issue"` (draft→issued), `action: "cancel"`, or `action: "unmark_paid"` (paid→issued, undo a mistaken payment) |
@@ -119,6 +62,10 @@ If `list_invoices_tool` does not resolve, the server is not connected or authori
 | `create_correction_invoice_tool` | Create a correction of an issued invoice |
 
 Note: `list_invoices_tool`'s `from_date`/`to_date` filter by **issue date**; use `paid_from`/`paid_to` to filter by payment date instead.
+
+`created_from`/`created_to` filter **Quento record creation dates**, inclusive UTC days. Timestamps are ISO 8601 UTC with milliseconds. A record creation timestamp is not proof of the actual payment time.
+
+Recorded payments are in the invoice currency. An invoice marked paid can still have no recorded payment entries; missing entries remain explicitly missing.
 
 **Invoice items format:**
 ```
@@ -185,15 +132,15 @@ Note: there is no `get_bank_account` or `delete_bank_account` tool on the live s
 
 ### Work journal (time tracking)
 
-Feature-flagged per account (`work_logs`) — if these tools respond "not enabled", the account has no access yet.
+Feature-flagged per account (`work_logs`). If these tools answer "The work journal feature is not enabled for this account", tell the user to enable it in Quento; do not fall back to `create_invoice_tool` for journal entries.
 
 | Tool | What it does |
 |------|-------------|
-| `list_work_logs_tool` | List entries. Filters: client_id, billing_status (`unbilled`/`billed`), date_from, date_to. Returns total hours in filter. |
-| `create_work_log_tool` | Log work: client_id, summary, work_date (default today), duration_minutes, project_name, tasks[]. |
-| `update_work_log_tool` | Update any field of an entry by ID, incl. billing_status. |
-| `summarize_unbilled_work_tool` | Unbilled time per client — entry counts, hours, amount when the client has an hourly_rate, and the entry IDs. |
-| `create_invoice_draft_from_work_logs_tool` | Turn explicit `work_log_ids` (one client, all unbilled, all with duration) into a **draft** invoice with a single aggregated hours line. Marks the entries billed. |
+| `create_work_log_tool` | Log time spent for a client: client_id, summary, optional work_date (default today), duration_minutes, project_name, tasks[]. Omit duration when the user didn't state it — never guess. |
+| `list_work_logs_tool` | List entries; filter by client_id, billing_status (`unbilled` \| `billed`), date_from/date_to, limit (default 20, max 100). Returns total hours in filter. |
+| `update_work_log_tool` | Update an entry by id: summary, date, duration, project, client, tasks (replaces the list), billing_status |
+| `summarize_unbilled_work_tool` | Unbilled time per client: entry count, total hours, amount when the client has an hourly rate, and the entry IDs |
+| `create_invoice_draft_from_work_logs_tool` | Create a DRAFT invoice from explicit `work_log_ids` of one client (all unbilled). Task items become one line each; plain entries aggregate into a single hours line and must have a duration. Links entries to the invoice and marks them billed. Never issues or sends. |
 
 Rules:
 - **Never guess duration.** If the user didn't say how long the work took, omit `duration_minutes` and ask; entries without duration cannot be invoiced.
@@ -222,12 +169,14 @@ Each currency is reported separately — amounts are never summed across currenc
 
 | Tool | What it does |
 |------|-------------|
-| `submit_invoice_to_ksef_tool` | Submit an issued invoice to KSeF. Company must have KSeF credentials configured. |
-| `get_ksef_status_tool` | Check acceptance status for a submitted invoice |
+| `get_ksef_status_tool` | Check acceptance status for an invoice submitted in the Quento app |
 | `list_ksef_submissions_tool` | List recent submissions, filter by status |
-| `list_ksef_payables_tool` | List incoming purchase invoices received via KSeF |
+| `list_ksef_payables_tool` | List purchase (cost) invoices received from suppliers via KSeF — faktury kosztowe/zakupowe. Read-only. Params: `company_id`, `status` (to_pay, needs_review, paid, ignored, disputed), `search` (supplier, NIP, invoice/KSeF number, payment title), `payment_details` (`ready` \| `missing`), `limit` (default 10, max 50), `sort` (`issue_date_desc` default, `issue_date_asc`, `due_date_asc`, `due_date_desc`, `amount_desc`, `amount_asc`). Returns supplier, invoice number, gross amount, due date, status, payment readiness, plus a gross total per currency across all matches. |
+| `get_ksef_payable_tool` | Get ONE purchase (cost) invoice by `id` (from `list_ksef_payables_tool`) or `invoice_number`, with supplier, KSeF number, dates, payment account/title, net/VAT/gross and parsed line items (name, qty, unit price, VAT). Read-only. Use it to see what an invoice was for, e.g. which one is the domain renewal. |
 
-Note: there is no `get_ksef_upo` tool on the live server — the official receipt (UPO) isn't retrievable via MCP; check `get_ksef_status_tool` or the Quento web app instead.
+Purchase invoices (faktury kosztowe/zakupowe) are NOT in `list_invoices_tool` or `get_statistics_tool`, which cover sales invoices only. For any question about cost invoices, what to pay, or supplier totals, call `list_ksef_payables_tool` and use only the amounts it returns. To see what a specific cost invoice contains (line items), call `get_ksef_payable_tool`; `list_ksef_payables_tool` has no line items. The tool cannot start bank payments; payment preparation and QR are in the Quento web app.
+
+Note: submitting invoices to KSeF is deliberately NOT available over MCP — it needs careful human review and is done only in the Quento web app. The official receipt (`get_ksef_upo`) is not exposed over MCP either; use `get_ksef_status_tool` or the web app. Never promise to submit an invoice to KSeF; point the user to the app.
 
 ---
 
@@ -278,6 +227,16 @@ When the resolved seller company's default currency is PLN but the user supplies
 
 Always retrieve a fresh rate; do not use model memory or an uncited rate. Never silently convert, and never describe `update_invoice_tool(currency: ...)` as conversion: it only relabels the existing amounts and re-picks the matching bank account. If the user requests a statutory VAT/accounting conversion, do not assume the current rate applies—establish the relevant transaction/tax date and retrieve the rate required for that date.
 
+### Bill logged work
+
+```
+1. summarize_unbilled_work_tool(client_id: 42)          → hours and amount pending
+2. list_work_logs_tool(client_id: 42, billing_status: "unbilled") → entry ids
+3. create_invoice_draft_from_work_logs_tool(work_log_ids: [7, 8, 9])
+   → draft invoice; entries are now billed and linked
+4. change_invoice_status_tool(id: ..., action: "issue") only when the user asks to issue
+```
+
 ### Check this month's revenue
 
 ```
@@ -314,12 +273,22 @@ Without `replace_items: true`, the tool matches by description — if you rename
 2. create_client(name: "PEKAO S.A.", nip: "5261040828", country: "PL")
 ```
 
-### Submit to KSeF
+### Purchase invoices (faktury kosztowe) to pay
 
 ```
-1. Verify invoice is issued (not draft)
-2. submit_invoice_to_ksef_tool(invoice_number: "001/06/2026")
-3. get_ksef_status_tool(invoice_number: "001/06/2026")
+1. list_companies_tool                               → confirm country is PL
+2. list_ksef_payables_tool(status: "to_pay", sort: "due_date_asc") → compare due dates with today to find late ones
+3. list_ksef_payables_tool(sort: "due_date_asc", status: "to_pay") → what to pay first
+4. list_ksef_payables_tool(payment_details: "missing") → invoices needing review
+5. get_ksef_payable_tool(id: <id from list>)          → line items of one invoice
+```
+
+### Check KSeF status
+
+Submission itself is done in the Quento web app, not via MCP.
+
+```
+1. get_ksef_status_tool(invoice_number: "001/06/2026")
    → status: "accepted", reference_number: "8992520556-20260622-..."
 ```
 
@@ -349,7 +318,7 @@ Without `replace_items: true`, the tool matches by description — if you rename
 ## Gotchas
 
 - **Tool names have a `_tool` suffix** — the real callable name is `list_invoices_tool`, not `list_invoices`. Only `create_client`, `get_client`, `update_client` are unsuffixed. Calling the unsuffixed form for any other tool will fail to resolve.
-- **Tools not appearing at all** — restart the client after adding the server and complete browser authorization in its MCP settings; per-client setup lives in [install.md](../../install.md). If OAuth cannot be completed, the client is not supported; do not substitute API keys or raw HTTP calls.
+- **Tools not appearing at all** — restart the client after adding the server and complete browser authorization in its MCP settings. If OAuth cannot be completed, the client is not supported; do not substitute API keys or raw HTTP calls.
 - **`replace_items: true`** — always use this in `update_invoice_tool` when correcting items. Without it, a renamed item (e.g. "Farba 1L" → "Farba 10L") is added as a new duplicate instead of replacing the original.
 - **Revenue vs issued** — `get_statistics_tool` revenue is always by `paid_at` (payment date), not issue date. "How much did I earn in June?" means paid in June, not invoiced in June.
 - **`list_invoices_tool` date filters** — `from_date`/`to_date` filter by issue date; `paid_from`/`paid_to` filter by payment date. Picking the wrong pair silently returns the wrong invoices instead of erroring.
@@ -358,6 +327,7 @@ Without `replace_items: true`, the tool matches by description — if you rename
 - **KSeF Poland-only** — KSeF tools silently error or return empty if the company's country isn't PL. Check `list_companies_tool` to confirm country.
 - **Draft-only edits** — `update_invoice_tool` fails on issued/paid invoices. For issued invoices, use `create_correction_invoice_tool` instead.
 - **`auto_issue` in send_invoice_email_tool** — defaults to `true`, so calling it on a draft automatically issues it first. Pass `auto_issue: false` to disable.
-- **`list_ksef_payables_tool` access** — per-user KSeF company access controls apply. If the tool returns empty, the authenticated user may not have `ksef_access` for those companies.
+- **`list_ksef_payables_tool` / `get_ksef_payable_tool` access** — per-user KSeF company access controls apply. If the tool returns empty, the authenticated user may not have been granted KSeF payables access for those companies (granted in Quento settings); full-account users and API keys see all PL companies.
 - **PDF links require login** — `get_invoice_pdf_link_tool` returns a URL under the company's own Quento domain, not a signed/temporary public link. The viewer must be logged in to Quento to open it.
+- **Work-log billing** — `create_invoice_tool` knows nothing about journal entries and silently leaves them unbilled. Use `create_invoice_draft_from_work_logs_tool` for anything logged via the work journal.
 - **No delete tools** — there is no `delete_client`, `delete_product`, or `delete_bank_account` on the live server, and no `get_bank_account`/`get_ksef_upo` either, despite what older docs may say. Don't assume a tool exists — check the live `tools/list` if in doubt.
