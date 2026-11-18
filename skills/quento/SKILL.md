@@ -28,32 +28,9 @@ Quento exposes its MCP server at:
 https://quento.app/mcp
 ```
 
-**Authentication is standard MCP OAuth.** Add the server with no headers to your MCP client config (`~/.claude.json` for Claude Code — under `mcpServers`, not `~/.claude/mcp.json`), restart, and authenticate in the browser when prompted (Claude Code: `/mcp` → **quento** → **Authenticate**). The client stores and renews the OAuth tokens. Do not configure API keys, bearer-token headers, or tenant-specific MCP URLs.
-
-```json
-{
-  "mcpServers": {
-    "quento": {
-      "type": "http",
-      "url": "https://quento.app/mcp"
-    }
-  }
-}
-```
-
-### If the Quento MCP tools are not available — set up the connection yourself
-
-You (the agent reading this) can bootstrap the connection: if this skill triggered but the Quento tools are missing (no `list_invoices_tool` via tool search), the MCP server is not configured or authorized in your client yet. Do this:
-
-1. **Add the server to your own client's MCP config** — you know your own config location and format. Claude Code: `claude mcp add --transport http --scope user quento https://quento.app/mcp`. Codex: `codex mcp add quento --url https://quento.app/mcp`. OpenCode: add `"quento": { "type": "remote", "url": "https://quento.app/mcp" }` under `"mcp"` in `opencode.json`. Other clients: add `https://quento.app/mcp` as a remote/HTTP MCP server in your equivalent config.
-2. **Hand the browser step to the user** — authorization is a human-only step. Tell them to restart the session, then authenticate (Claude Code: `/mcp` → **quento** → **Authenticate**; Codex: `codex mcp login quento`; OpenCode: `opencode mcp auth quento`, or it prompts automatically on first use; other clients: their "needs login" prompt), signing in to Quento and clicking **Authorize**. It's once per machine.
-3. **Verify after restart** by calling `list_invoices_tool` — real data means you're connected.
-
-If your client only supports stdio MCP servers, use the `mcp-remote` shim (`npx mcp-remote https://quento.app/mcp`) to proxy stdio to HTTP and complete the same browser OAuth flow. If the client cannot complete MCP OAuth, tell the user that it is unsupported; do not fall back to an API key or raw HTTP calls. See [install.md](https://github.com/DeliveristsIO/quento-skills/blob/main/install.md).
+**Authentication is standard MCP OAuth.** Add that tenant-neutral URL with no headers to your MCP client, restart, and authenticate in the browser when prompted. The client stores and renews the OAuth tokens. Do not configure API keys, bearer-token headers, or tenant-specific MCP URLs. Client installation and configuration are covered in [install.md](https://github.com/DeliveristsIO/quento-skills/blob/main/install.md).
 
 **Tool names carry a `_tool` suffix** — e.g. the tool is `list_invoices_tool`, not `list_invoices`. The three exceptions are `create_client`, `get_client`, and `update_client`, which have no suffix. All tool references below use the real, callable names.
-
-**If the tools don't show up** (`ToolSearch`/agent can't find `list_invoices_tool` etc.): restart the client after adding the server, then open its MCP settings and complete OAuth authorization. Claude Code: `/mcp` → **quento** → **Authenticate**. Codex: `codex mcp login quento`, then inspect `/mcp` after restarting if needed. Do not work around a missing OAuth connection with `curl` or manually supplied credentials.
 
 ## Agent invariants
 

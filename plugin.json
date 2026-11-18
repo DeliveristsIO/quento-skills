@@ -15,7 +15,7 @@
     "com.openai": {
       "interface": {
         "displayName": "Quento",
-        "shortDescription": "Invoicing, clients and analytics for European SMBs.",
+        "shortDescription": "Invoicing for European SMBs",
         "longDescription": "Read and change a Quento account: draft, issue, send and correct invoices, keep clients and companies (auto-filled from the VAT registry), track payments and unbilled work, run revenue analytics, and submit to KSeF where Polish e-invoicing applies.",
         "developerName": "Deliverists.IO Sp. z o.o.",
         "category": "Finance",
@@ -26,8 +26,7 @@
         "defaultPrompt": [
           "Use Quento to invoice Alpha Corp for 10 hours of consulting at 200 PLN/h.",
           "Ask Quento how much revenue came in last month.",
-          "Use Quento to mark invoice 001/06/2026 as paid.",
-          "Ask Quento which invoices are still unpaid."
+          "Use Quento to mark invoice 001/06/2026 as paid."
         ],
         "brandColor": "#000000"
       }
