@@ -1,0 +1,32 @@
+{
+  "v": 1,
+  "areas": [
+    {
+      "key": "content",
+      "how": "Skill docs are plain Markdown edited directly: skills/quento/SKILL.md carries YAML front matter (name, description, triggers) and is the source of truth; README.md and install.md are the public docs. Nothing generates pages or articles from them.",
+      "evidence": ["skills/quento/SKILL.md:1", "AGENTS.md:9"]
+    },
+    { "key": "structured-data", "absent": true },
+    { "key": "pages", "absent": true },
+    { "key": "i18n", "absent": true },
+    {
+      "key": "images",
+      "how": "The repository holds no image files and no image pipeline; README.md only embeds a remote YouTube thumbnail by URL, and no build step copies or converts images.",
+      "evidence": ["README.md:13"]
+    },
+    { "key": "background-jobs", "absent": true },
+    {
+      "key": "tests",
+      "how": "No automated test suite and no CI config: AGENTS.md says to verify through an OAuth-capable MCP client connected to https://quento.app/mcp, calling a read-only tool such as list_invoices_tool.",
+      "evidence": ["AGENTS.md:39"]
+    }
+  ],
+  "content": {
+    "paths": ["skills/**/*.md", "README.md", "install.md"],
+    "file": "skills/<skill>/SKILL.md",
+    "locales": ["en"],
+    "defaultLocale": "en",
+    "localeOnly": true,
+    "frontMatter": { "required": ["name", "description"] }
+  }
+}
