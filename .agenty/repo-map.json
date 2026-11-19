@@ -3,44 +3,30 @@
   "areas": [
     {
       "key": "content",
-      "how": "Content is Markdown documentation, not a CMS: skills/<skill>/SKILL.md is the source of truth and carries YAML front matter (name, description, compatibility, metadata); README.md and install.md are the public prose. English only, no build step, no front matter in the root docs.",
-      "evidence": ["skills/quento/SKILL.md:2", "AGENTS.md:9", "README.md:1", "install.md:1"]
+      "how": "Skill docs are plain Markdown edited directly: skills/quento/SKILL.md carries YAML front matter (name, description, compatibility, metadata) and is the source of truth; README.md and install.md are the public docs. Nothing generates pages from them; users get the skill via npx skills add or the Claude Code plugin.",
+      "evidence": ["skills/quento/SKILL.md:1", "AGENTS.md:9", "README.md:6", ".claude-plugin/plugin.json:1"]
     },
-    {
-      "key": "structured-data",
-      "absent": true
-    },
-    {
-      "key": "pages",
-      "how": "No website and no page builder. The docs are distributed by installers: npx skills add DeliveristsIO/quento-skills copies skills/<skill>/SKILL.md into the user's agent, and the Claude Code plugin (.claude-plugin/plugin.json and marketplace.json) also registers the Quento MCP server declared in mcp.json.",
-      "evidence": ["README.md:6", "install.md:45", ".claude-plugin/plugin.json:1", "mcp.json:1"]
-    },
-    {
-      "key": "i18n",
-      "absent": true
-    },
+    { "key": "structured-data", "absent": true },
+    { "key": "pages", "absent": true },
+    { "key": "i18n", "absent": true },
     {
       "key": "images",
-      "how": "No image files in the repository. The only picture on screen is the demo thumbnail embedded in README.md as an external YouTube URL (https://img.youtube.com/vi/KNJRGLmh1oc/maxresdefault.jpg), so there is no image directory and no image build step.",
+      "how": "The repository holds no image files and no image pipeline; README.md only embeds a remote YouTube thumbnail by URL, and no build step copies or converts images.",
       "evidence": ["README.md:13"]
     },
-    {
-      "key": "background-jobs",
-      "absent": true
-    },
+    { "key": "background-jobs", "absent": true },
     {
       "key": "tests",
-      "absent": true
+      "how": "No automated test suite and no CI config: AGENTS.md says to verify through an OAuth-capable MCP client connected to https://quento.app/mcp, calling a read-only tool such as list_invoices_tool.",
+      "evidence": ["AGENTS.md:39"]
     }
   ],
   "content": {
-    "paths": ["skills/**", "README.md", "install.md"],
+    "paths": ["skills/**/*.md", "README.md", "install.md"],
     "file": "skills/<skill>/SKILL.md",
     "locales": ["en"],
     "defaultLocale": "en",
     "localeOnly": true,
-    "url": "https://github.com/DeliveristsIO/quento-skills/blob/main/skills/<skill>/SKILL.md",
-    "frontMatter": { "required": ["name", "description"] },
-    "generated": []
+    "frontMatter": { "required": ["name", "description"] }
   }
 }
