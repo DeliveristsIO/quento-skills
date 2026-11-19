@@ -3,8 +3,8 @@
   "areas": [
     {
       "key": "content",
-      "how": "Skill docs are plain Markdown edited directly: skills/quento/SKILL.md carries YAML front matter (name, description, triggers) and is the source of truth; README.md and install.md are the public docs. Nothing generates pages or articles from them.",
-      "evidence": ["skills/quento/SKILL.md:1", "AGENTS.md:9"]
+      "how": "Skill docs are plain Markdown edited directly: skills/quento/SKILL.md carries YAML front matter (name, description, compatibility, metadata) and is the source of truth; README.md and install.md are the public docs. Nothing generates pages from them; users get the skill via npx skills add or the Claude Code plugin.",
+      "evidence": ["skills/quento/SKILL.md:1", "AGENTS.md:9", "README.md:6", ".claude-plugin/plugin.json:1"]
     },
     { "key": "structured-data", "absent": true },
     { "key": "pages", "absent": true },
